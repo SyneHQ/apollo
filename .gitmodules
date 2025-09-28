@@ -1,0 +1,5 @@
+[submodule "_kms"]
+	path = cmd/_kms
+	url = https://github.com/synehq/kms.rs.git
+	branch = sudo
+	sparse-checkout = generated/go/proto

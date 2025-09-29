@@ -2,7 +2,7 @@
   "name": "@synehq/apollo",
   "type": "module",
   "publisher": "SyneHQ",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "main": "./dist/jobs.cjs",
   "module": "./dist/jobs.js",
   "types": "./dist/jobs.d.ts",

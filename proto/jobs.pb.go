@@ -7,11 +7,12 @@
 package proto
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -623,7 +624,7 @@ const file_jobs_proto_rawDesc = "" +
 	"\x06RunJob\x12\x13.jobs.RunJobRequest\x1a\x14.jobs.RunJobResponse\x12<\n" +
 	"\tDeleteJob\x12\x16.jobs.DeleteJobRequest\x1a\x17.jobs.DeleteJobResponse\x12K\n" +
 	"\x0eUpdateSchedule\x12\x1b.jobs.UpdateScheduleRequest\x1a\x1c.jobs.UpdateScheduleResponse\x12H\n" +
-	"\rListSchedules\x12\x1a.jobs.ListSchedulesRequest\x1a\x1b.jobs.ListSchedulesResponseB,Z*github.com/SyneHQ/dramtic.jobs/proto;protob\x06proto3"
+	"\rListSchedules\x12\x1a.jobs.ListSchedulesRequest\x1a\x1b.jobs.ListSchedulesResponseB,Z*github.com/SyneHQ/apollo/proto;protob\x06proto3"
 
 var (
 	file_jobs_proto_rawDescOnce sync.Once

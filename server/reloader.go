@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/SyneHQ/dramtic.jobs/runner"
+	"github.com/SyneHQ/apollo/runner"
 )
 
 // Reload schedules from store at startup

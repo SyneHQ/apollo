@@ -8,11 +8,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	config "github.com/SyneHQ/dramtic.jobs"
-	"github.com/SyneHQ/dramtic.jobs/keys"
-	"github.com/SyneHQ/dramtic.jobs/proto"
-	"github.com/SyneHQ/dramtic.jobs/runner"
-	jobsserver "github.com/SyneHQ/dramtic.jobs/server"
+	config "github.com/SyneHQ/apollo"
+	"github.com/SyneHQ/apollo/keys"
+	"github.com/SyneHQ/apollo/proto"
+	"github.com/SyneHQ/apollo/runner"
+	jobsserver "github.com/SyneHQ/apollo/server"
 	"google.golang.org/grpc"
 )
 

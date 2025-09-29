@@ -1,4 +1,4 @@
-module github.com/SyneHQ/dramtic.jobs
+module github.com/SyneHQ/apollo
 
 go 1.24.4
 
@@ -8,8 +8,6 @@ require (
 	github.com/infisical/go-sdk v0.5.100
 	github.com/joho/godotenv v1.5.1
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/shopspring/decimal v1.4.0
-	github.com/steebchen/prisma-client-go v0.47.0
 	modernc.org/sqlite v1.39.0
 )
 
@@ -59,7 +57,6 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.95.2 // indirect
 	github.com/sony/gobreaker v0.5.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
-	go.mongodb.org/mongo-driver/v2 v2.0.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect
@@ -77,5 +74,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250818200422-3122310a409c // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c // indirect
 	google.golang.org/grpc v1.74.2
-	google.golang.org/protobuf v1.36.7 // indirect
+	google.golang.org/protobuf v1.36.7
 )

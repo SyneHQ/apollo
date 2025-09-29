@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	cfg "github.com/SyneHQ/dramtic.jobs"
-	"github.com/SyneHQ/dramtic.jobs/proto"
-	"github.com/SyneHQ/dramtic.jobs/runner"
-	"github.com/SyneHQ/dramtic.jobs/scheduler"
+	cfg "github.com/SyneHQ/apollo"
+	"github.com/SyneHQ/apollo/proto"
+	"github.com/SyneHQ/apollo/runner"
+	"github.com/SyneHQ/apollo/scheduler"
 )
 
 type JobsServer struct {

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package jobs;
 
-option go_package = "github.com/SyneHQ/dramtic.jobs/proto;proto";
+option go_package = "github.com/SyneHQ/apollo/proto;proto";
 
 message Resources { string cpu = 1; string memory = 2; }
 

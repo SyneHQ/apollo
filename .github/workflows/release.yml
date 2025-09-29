@@ -20,6 +20,9 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Change working directory
+        run: cd proto/generated/node/proto
+
       - name: Get current version
         id: current_version
         run: |

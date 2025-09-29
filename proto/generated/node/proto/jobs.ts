@@ -96,7 +96,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): Resources {
+        static override deserializeBinary(bytes: Uint8Array): Resources {
             return Resources.deserialize(bytes);
         }
     }
@@ -281,7 +281,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): RunJobRequest {
+        static override deserializeBinary(bytes: Uint8Array): RunJobRequest {
             return RunJobRequest.deserialize(bytes);
         }
     }
@@ -371,7 +371,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): RunJobResponse {
+        static override deserializeBinary(bytes: Uint8Array): RunJobResponse {
             return RunJobResponse.deserialize(bytes);
         }
     }
@@ -438,7 +438,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): DeleteJobRequest {
+        static override deserializeBinary(bytes: Uint8Array): DeleteJobRequest {
             return DeleteJobRequest.deserialize(bytes);
         }
     }
@@ -478,7 +478,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): DeleteJobResponse {
+        static override deserializeBinary(bytes: Uint8Array): DeleteJobResponse {
             return DeleteJobResponse.deserialize(bytes);
         }
     }
@@ -568,7 +568,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): UpdateScheduleRequest {
+        static override deserializeBinary(bytes: Uint8Array): UpdateScheduleRequest {
             return UpdateScheduleRequest.deserialize(bytes);
         }
     }
@@ -608,7 +608,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): UpdateScheduleResponse {
+        static override deserializeBinary(bytes: Uint8Array): UpdateScheduleResponse {
             return UpdateScheduleResponse.deserialize(bytes);
         }
     }
@@ -648,7 +648,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): ListSchedulesRequest {
+        static override deserializeBinary(bytes: Uint8Array): ListSchedulesRequest {
             return ListSchedulesRequest.deserialize(bytes);
         }
     }
@@ -810,7 +810,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): ScheduleItem {
+        static override deserializeBinary(bytes: Uint8Array): ScheduleItem {
             return ScheduleItem.deserialize(bytes);
         }
     }
@@ -877,7 +877,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static deserializeBinary(bytes: Uint8Array): ListSchedulesResponse {
+        static override deserializeBinary(bytes: Uint8Array): ListSchedulesResponse {
             return ListSchedulesResponse.deserialize(bytes);
         }
     }
@@ -955,15 +955,19 @@ export namespace jobs {
             super(address, credentials, options);
         }
         RunJob: GrpcUnaryServiceInterface<RunJobRequest, RunJobResponse> = (message: RunJobRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<RunJobResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<RunJobResponse>, callback?: grpc_1.requestCallback<RunJobResponse>): grpc_1.ClientUnaryCall => {
+            // @ts-ignore
             return super.RunJob(message, metadata, options, callback);
         };
         DeleteJob: GrpcUnaryServiceInterface<DeleteJobRequest, DeleteJobResponse> = (message: DeleteJobRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<DeleteJobResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<DeleteJobResponse>, callback?: grpc_1.requestCallback<DeleteJobResponse>): grpc_1.ClientUnaryCall => {
+            // @ts-ignore
             return super.DeleteJob(message, metadata, options, callback);
         };
         UpdateSchedule: GrpcUnaryServiceInterface<UpdateScheduleRequest, UpdateScheduleResponse> = (message: UpdateScheduleRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<UpdateScheduleResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<UpdateScheduleResponse>, callback?: grpc_1.requestCallback<UpdateScheduleResponse>): grpc_1.ClientUnaryCall => {
+            // @ts-ignore
             return super.UpdateSchedule(message, metadata, options, callback);
         };
         ListSchedules: GrpcUnaryServiceInterface<ListSchedulesRequest, ListSchedulesResponse> = (message: ListSchedulesRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<ListSchedulesResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<ListSchedulesResponse>, callback?: grpc_1.requestCallback<ListSchedulesResponse>): grpc_1.ClientUnaryCall => {
+            // @ts-ignore
             return super.ListSchedules(message, metadata, options, callback);
         };
     }

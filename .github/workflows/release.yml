@@ -1,0 +1,75 @@
+name: Create Release on jobs.ts Changes
+
+on:
+  push:
+    branches: [sudo]
+    paths:
+      - 'proto/generated/node/proto/jobs.ts'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Get current version
+        id: current_version
+        run: |
+          VERSION=$(bun pm ls --json | jq -r '.[0].version // "0.0.1"')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          CURRENT_VERSION="${{ steps.current_version.outputs.version }}"
+          # Extract version parts
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          # Bump patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update package version
+        run: |
+          NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
+          bun pm ls --json | jq -r '.[].name' | xargs -I {} bun pkg set version=$NEW_VERSION
+
+      - name: Commit version bump
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git push
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.bump_version.outputs.new_version }}
+          release_name: Release v${{ steps.bump_version.outputs.new_version }}
+          body: |
+            ## Changes
+            - Updated jobs.ts with new protobuf definitions
+            
+            ## Installation
+            ```bash
+            bun add @synehq/apollo@${{ steps.bump_version.outputs.new_version }}
+            ```
+          draft: false
+          prerelease: false

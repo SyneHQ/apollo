@@ -1,0 +1,33 @@
+{
+  "name": "@synehq/apollo",
+  "type": "module",
+  "publisher": "SyneHQ",
+  "version": "0.0.1",
+  "main": "./dist/jobs.cjs",
+  "module": "./dist/jobs.js",
+  "types": "./dist/jobs.d.ts",
+  "scripts": {
+    "build": "bun run build.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "types": "./dist/jobs.d.ts",
+    "import": "./dist/jobs.js",
+    "require": "./dist/jobs.cjs"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/google-protobuf": "^3.15.12",
+    "bun-plugin-dts": "^0.3.0"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.0",
+    "google-protobuf": "^4.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

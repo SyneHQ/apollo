@@ -16,16 +16,16 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Change working directory
-        run: cd proto/generated/node/proto
-
       - name: Install dependencies
+        working-directory: proto/generated/node/proto
         run: bun install
 
       - name: Build package
+        working-directory: proto/generated/node/proto
         run: bun run build
 
       - name: Publish to NPM
+        working-directory: proto/generated/node/proto
         run: bun publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

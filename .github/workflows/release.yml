@@ -21,13 +21,11 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Change working directory
-        run: cd proto/generated/node/proto
-
       - name: Get current version
         id: current_version
+        working-directory: proto/generated/node/proto
         run: |
-          VERSION=$(bun pm ls --json | jq -r '.[0].version // "0.0.1"')
+          VERSION=$(cat package.json | jq -r '.version // "0.0.1"')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Bump version
@@ -48,15 +46,16 @@ jobs:
           echo "New version: $NEW_VERSION"
 
       - name: Update package version
+        working-directory: proto/generated/node/proto
         run: |
           NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
-          bun pm ls --json | jq -r '.[].name' | xargs -I {} bun pkg set version=$NEW_VERSION
+          jq --arg version "$NEW_VERSION" '.version = $version' package.json > tmp.json && mv tmp.json package.json
 
       - name: Commit version bump
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add package.json
+          git add proto/generated/node/proto/package.json
           git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }}"
           git push
 

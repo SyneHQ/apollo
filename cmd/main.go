@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -11,7 +10,6 @@ import (
 
 	config "github.com/SyneHQ/dramtic.jobs"
 	"github.com/SyneHQ/dramtic.jobs/keys"
-	"github.com/SyneHQ/dramtic.jobs/prisma/db"
 	"github.com/SyneHQ/dramtic.jobs/proto"
 	"github.com/SyneHQ/dramtic.jobs/runner"
 	jobsserver "github.com/SyneHQ/dramtic.jobs/server"
@@ -40,12 +38,6 @@ func main() {
 		panic(err)
 	}
 
-	client := db.NewClient(
-		db.WithDatasourceURL(config.DatabaseURL),
-	)
-	if err := client.Prisma.Connect(); err != nil {
-		panic(err)
-	}
 	// Choose runner
 	var r runner.Runner
 	switch config.JobsProvider {
@@ -74,9 +66,6 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		if err := client.Prisma.Disconnect(); err != nil {
-			panic(fmt.Errorf("could not disconnect: %w", err))
-		}
 		grpcServer.GracefulStop()
 		// clean up your webserver here
 		// e.g. httpServer.Shutdown(ctx)

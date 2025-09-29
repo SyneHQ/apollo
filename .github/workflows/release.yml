@@ -5,6 +5,7 @@ on:
     branches: [sudo]
     paths:
       - 'proto/generated/node/proto/jobs.ts'
+      - '.github/workflows/release.yml'
 
 jobs:
   release:

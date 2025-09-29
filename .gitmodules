@@ -3,3 +3,8 @@
 	url = https://github.com/synehq/kms.rs.git
 	branch = sudo
 	sparse-checkout = generated/go/proto
+
+[submodule "worker.ts"]
+	path = worker.ts
+	url = https://github.com/synehq/worker.ts.git
+	branch = sudo

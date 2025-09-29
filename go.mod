@@ -5,6 +5,8 @@ go 1.24.4
 require (
 	github.com/infisical/go-sdk v0.5.100
 	github.com/joho/godotenv v1.5.1
+	github.com/shopspring/decimal v1.4.0
+	github.com/steebchen/prisma-client-go v0.47.0
 )
 
 require (
@@ -38,8 +40,8 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/oracle/oci-go-sdk/v65 v65.95.2 // indirect
 	github.com/sony/gobreaker v0.5.0 // indirect
-	github.com/steebchen/prisma-client-go v0.47.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.0.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect

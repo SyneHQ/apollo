@@ -88,9 +88,11 @@ jobs:
       - name: Build package
         working-directory: proto/generated/node/proto
         run: bun run build
-
+        
       - name: Publish to NPM
         working-directory: proto/generated/node/proto
-        run: bun publish --access public
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+          bun publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

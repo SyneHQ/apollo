@@ -91,6 +91,6 @@ jobs:
 
       - name: Publish to NPM
         working-directory: proto/generated/node/proto
-        run: bun publish
+        run: bun publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

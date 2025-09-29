@@ -1,0 +1,16 @@
+image: ghcr.io/synehq/rover.ts:latest
+
+backup:
+  resources:
+    memory: "2Gi"
+    cpu: "1000m"
+
+restore:
+  resources:
+    memory: "4Gi"
+    cpu: "2000m"
+
+migrate:
+  resources:
+    memory: "5Gi"
+    cpu: "3000m"

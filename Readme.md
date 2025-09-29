@@ -15,3 +15,9 @@ Ever tried running a massive data migration and had it fail halfway through? Or 
 - 🌐 **Language agnostic** - Define jobs in Go, Python, Node.js, or whatever you prefer
 - 📊 **Real-time monitoring** - Track your jobs with detailed logs and status updates
 - 🔧 **gRPC API** - Fast, type-safe communication
+
+### Client usage
+
+[For Node click here](/proto/generated/node/proto/README.md)
+
+> For all the langs you can generate from [Proto def](/proto/jobs.proto)

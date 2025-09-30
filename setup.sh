@@ -4,14 +4,6 @@ set -e
 
 # Animated ASCII art: reveal line by line
 ascii_art=(
-"           _.-'''''-._"
-"         .'  _     _  '."
-"        /   (_)   (_)   \\"
-"       |  ,           ,  |"
-"       |  \\\`.       .\`/  |"
-"        \\  '.\`'\"\"'\`.'  /"
-"         '.  \`'---'\`  .'"
-"           '-._____.-'"
 ""
 "        APOLLO BY SYNEHQ"
 ""
@@ -30,12 +22,11 @@ ascii_art=(
 "   .      .   .   .   .   .   .   .   .   .   .   .   .   ."
 "      .   .   .   .   .   .   .   .   .   .   .   .   .   ."
 "         .   .   .   .   .   .   .   .   .   .   .   .   ."
-"             .   .   .   .   .   .   .   .   .   .   .   ."
 )
 
 for line in "${ascii_art[@]}"; do
     echo "$line"
-    sleep 0.07
+    sleep 0.02
 done
 
 # 1. Install Docker if not present
@@ -120,17 +111,24 @@ else
 fi
 
 # 7. Deploy or update the Docker Swarm service
+# Expose port 6910:6910 using Docker Swarm's --publish mode
 if docker service ls | grep -q "$SERVICE_NAME"; then
     echo "Updating existing service..."
     if [ ${#ENV_UPDATE_FLAGS[@]} -gt 0 ]; then
         docker service update \
             --image $REGISTRY/$IMAGE_NAME:$TAG \
             --with-registry-auth \
-            -p $PORT_TO_EXPOSE:$PORT_TO_EXPOSE \
+            --publish-rm $PORT_TO_EXPOSE:6910 \
+            --publish-add $PORT_TO_EXPOSE:6910 \
             "${ENV_UPDATE_FLAGS[@]}" \
             $SERVICE_NAME
     else
-        docker service update --image $REGISTRY/$IMAGE_NAME:$TAG --with-registry-auth $SERVICE_NAME
+        docker service update \
+            --image $REGISTRY/$IMAGE_NAME:$TAG \
+            --with-registry-auth \
+            --publish-rm $PORT_TO_EXPOSE:6910 \
+            --publish-add $PORT_TO_EXPOSE:6910 \
+            $SERVICE_NAME
     fi
 else
     echo "Creating new service..."
@@ -139,7 +137,7 @@ else
             --name $SERVICE_NAME \
             --replicas 1 \
             --with-registry-auth \
-            -p $PORT_TO_EXPOSE:$PORT_TO_EXPOSE \
+            --publish $PORT_TO_EXPOSE:6910 \
             "${ENV_CREATE_FLAGS[@]}" \
             $REGISTRY/$IMAGE_NAME:$TAG
     else
@@ -147,7 +145,7 @@ else
             --name $SERVICE_NAME \
             --replicas 1 \
             --with-registry-auth \
-            -p $PORT_TO_EXPOSE:$PORT_TO_EXPOSE \
+            --publish $PORT_TO_EXPOSE:6910 \
             $REGISTRY/$IMAGE_NAME:$TAG
     fi
 fi

@@ -6,11 +6,13 @@ on:
     paths:
       - '**.go'
       - 'Dockerfile'
+      - 'jobs.yml'
   pull_request:
     branches: [ sudo ]
     paths:
       - '**.go'
       - 'Dockerfile'
+      - 'jobs.yml'
 
 env:
   REGISTRY: ghcr.io

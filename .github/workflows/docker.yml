@@ -7,12 +7,16 @@ on:
       - '**.go'
       - 'Dockerfile'
       - 'jobs.yml'
+      - '.github/workflows/docker.yml'
+      - 'cloud.Dockerfile'
   pull_request:
     branches: [ sudo ]
     paths:
       - '**.go'
       - 'Dockerfile'
       - 'jobs.yml'
+      - '.github/workflows/docker.yml'
+      - 'cloud.Dockerfile'
 
 env:
   REGISTRY: ghcr.io

@@ -202,4 +202,12 @@ else
         $SERVICE_NAME
 fi
 
+# 9. Set up firewall for $PORT_TO_EXPOSE port
+if ufw status | grep -q "$PORT_TO_EXPOSE/tcp"; then
+    echo "Firewall rule for $PORT_TO_EXPOSE/tcp already exists."
+else
+    echo "Adding firewall rule for $PORT_TO_EXPOSE/tcp..."
+    ufw allow $PORT_TO_EXPOSE/tcp
+fi
+
 echo "Setup complete. Your service will be automatically updated when a new image is pushed to GHCR."

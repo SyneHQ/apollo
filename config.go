@@ -9,6 +9,7 @@ import (
 )
 
 type JobsConfig struct {
+	Cmd     string
 	Image   string
 	Backup  JobConfig
 	Restore JobConfig
@@ -45,7 +46,7 @@ func Load() (*Config, error) {
 	jobs := readYML()
 
 	return &Config{
-		Port:         getEnv("PORT", "8080"),
+		Port:         getEnv("PORT", "6910"),
 		Environment:  getEnv("ENVIRONMENT", "development"),
 		DatabaseURL:  getEnv("DATABASE_URL", "postgres://syneuser:synehq@mbp:5432/synehq?sslmode=require"),
 		Jobs:         *jobs,

@@ -7,17 +7,19 @@ import (
 	"os"
 
 	infisical "github.com/infisical/go-sdk"
+	"github.com/infisical/go-sdk/packages/models"
 )
 
 type InfisicalSecrets struct {
-	client infisical.InfisicalClientInterface
+	client  infisical.InfisicalClientInterface
+	secrets []models.Secret
 }
 
 func (i *InfisicalSecrets) GetClient() infisical.InfisicalClientInterface {
 	return i.client
 }
 
-func NewInfisicalSecrets(exitOnError bool) (*InfisicalSecrets, error) {
+func NewInfisicalSecrets(exitOnError bool) (*[]models.Secret, error) {
 	log.Printf("🔑 Line 18 - NewInfisicalSecrets: Starting Infisical client initialization")
 
 	client := infisical.NewInfisicalClient(context.Background(), infisical.Config{
@@ -26,7 +28,8 @@ func NewInfisicalSecrets(exitOnError bool) (*InfisicalSecrets, error) {
 	})
 
 	infisicalSecrets := InfisicalSecrets{
-		client: client,
+		client:  client,
+		secrets: make([]models.Secret, 0),
 	}
 
 	log.Printf("🔐 Line 28 - NewInfisicalSecrets: Attempting universal auth login")
@@ -42,7 +45,7 @@ func NewInfisicalSecrets(exitOnError bool) (*InfisicalSecrets, error) {
 
 	log.Printf("✅ Line 39 - NewInfisicalSecrets: Auth login successful, loading secrets")
 	// load the secrets
-	_, err = infisicalSecrets.client.Secrets().List(infisical.ListSecretsOptions{
+	sec, err := infisicalSecrets.client.Secrets().List(infisical.ListSecretsOptions{
 		ProjectID:          os.Getenv("INFISICAL_PROJECT_ID"),
 		Environment:        os.Getenv("INFISICAL_ENV"),
 		AttachToProcessEnv: true,
@@ -57,5 +60,7 @@ func NewInfisicalSecrets(exitOnError bool) (*InfisicalSecrets, error) {
 	}
 
 	log.Printf("🎉 Line 54 - NewInfisicalSecrets: Infisical client successfully initialized and secrets loaded")
-	return &infisicalSecrets, nil
+
+	infisicalSecrets.secrets = sec
+	return &infisicalSecrets.secrets, nil
 }

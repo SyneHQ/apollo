@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	run "cloud.google.com/go/run/apiv2"
 	rpb "cloud.google.com/go/run/apiv2/runpb"
 	scheduler "cloud.google.com/go/scheduler/apiv1"
 	spb "cloud.google.com/go/scheduler/apiv1/schedulerpb"
+	"github.com/infisical/go-sdk/packages/models"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,10 +25,11 @@ type CloudRunRunner struct {
 	ClientOptions []option.ClientOption
 	// Optional service account email for Cloud Scheduler HTTP OAuth
 	ServiceAccountEmail string
+	Secrets             []models.Secret
 }
 
-func NewCloudRunRunner(projectID, region, image string) *CloudRunRunner {
-	return &CloudRunRunner{ProjectID: projectID, Region: region, Image: image}
+func NewCloudRunRunner(projectID, region, image string, secrets []models.Secret) *CloudRunRunner {
+	return &CloudRunRunner{ProjectID: projectID, Region: region, Image: image, Secrets: secrets}
 }
 
 func (c *CloudRunRunner) jobName(id string) string {
@@ -37,13 +40,14 @@ func (c *CloudRunRunner) parent() string {
 	return fmt.Sprintf("projects/%s/locations/%s", c.ProjectID, c.Region)
 }
 
-func (c *CloudRunRunner) ensureJob(ctx context.Context, client *run.JobsClient, req JobRequest) error {
+func (c *CloudRunRunner) ensureJob(ctx context.Context, client *run.JobsClient, cmd string, req JobRequest) error {
 	name := c.jobName(req.Name)
 	// Check if job exists
 	if _, err := client.GetJob(ctx, &rpb.GetJobRequest{Name: name}); err != nil {
 		if status.Code(err) != codes.NotFound {
 			return err
 		}
+
 		// Create new job
 		job := &rpb.Job{
 			Name: name,
@@ -51,9 +55,10 @@ func (c *CloudRunRunner) ensureJob(ctx context.Context, client *run.JobsClient, 
 				Template: &rpb.TaskTemplate{
 					Containers: []*rpb.Container{
 						{
-							Image:   c.Image,
-							Command: []string{"/app/rover"},
-							Args:    buildArgs(req),
+							Image: c.Image,
+							Command: []string{
+								cmd,
+							},
 							Resources: &rpb.ResourceRequirements{Limits: map[string]string{
 								"cpu":    req.Resources.CPU,
 								"memory": req.Resources.Memory,
@@ -78,24 +83,88 @@ func (c *CloudRunRunner) ensureJob(ctx context.Context, client *run.JobsClient, 
 	return nil
 }
 
-func buildArgs(req JobRequest) []string {
-	args := []string{req.Command}
-	if req.ArgsJSONBase64 != "" {
-		args = append(args, req.ArgsJSONBase64)
-	}
-	return args
-}
-
-func (c *CloudRunRunner) RunJob(ctx context.Context, req JobRequest) (string, error) {
+func (c *CloudRunRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (string, error) {
 	client, err := run.NewJobsClient(ctx, c.ClientOptions...)
 	if err != nil {
 		return "", err
 	}
 	defer client.Close()
-	if err := c.ensureJob(ctx, client, req); err != nil {
+
+	// Generate job ID if not provided
+	jobID := req.JobID
+	if jobID == "" {
+		jobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
+	}
+
+	if err := c.ensureJob(ctx, client, cmd, req); err != nil {
 		return "", err
 	}
-	op, err := client.RunJob(ctx, &rpb.RunJobRequest{Name: c.jobName(req.Name)})
+
+	// Build run request with overrides
+	runReq := &rpb.RunJobRequest{Name: c.jobName(req.Name)}
+
+	// Always inject Infisical secrets, and apply client overrides if provided
+	overrides := &rpb.RunJobRequest_Overrides{}
+	containerOverride := &rpb.RunJobRequest_Overrides_ContainerOverride{}
+
+	// Combine Infisical secrets and client-provided environment variables
+	// Client overrides will take precedence over Infisical secrets
+	allEnvVars := make([]*rpb.EnvVar, 0, len(c.Secrets))
+	if req.Overrides != nil {
+		allEnvVars = make([]*rpb.EnvVar, 0, len(c.Secrets)+len(req.Overrides.Env))
+	}
+
+	// First add Infisical secrets
+	for _, secret := range c.Secrets {
+		allEnvVars = append(allEnvVars, &rpb.EnvVar{
+			Name: secret.SecretKey,
+			Values: &rpb.EnvVar_Value{
+				Value: secret.SecretValue,
+			},
+		})
+	}
+
+	// Then add client-provided environment variables (these will override Infisical secrets)
+	if req.Overrides != nil && len(req.Overrides.Env) > 0 {
+		for _, envVar := range req.Overrides.Env {
+			allEnvVars = append(allEnvVars, &rpb.EnvVar{
+				Name: envVar.Name,
+				Values: &rpb.EnvVar_Value{
+					Value: envVar.Value,
+				},
+			})
+		}
+	}
+
+	// Set environment variables if we have any
+	if len(allEnvVars) > 0 {
+		containerOverride.Env = allEnvVars
+	}
+
+	// Apply client overrides if provided
+	if req.Overrides != nil {
+		// Override args
+		if len(req.Overrides.Args) > 0 {
+			containerOverride.Args = req.Overrides.Args
+		}
+
+		// Override task count
+		if req.Overrides.TaskCount > 0 {
+			overrides.TaskCount = req.Overrides.TaskCount
+		}
+	}
+
+	// Set container overrides if we have any
+	if len(containerOverride.Args) > 0 || len(containerOverride.Env) > 0 {
+		overrides.ContainerOverrides = []*rpb.RunJobRequest_Overrides_ContainerOverride{containerOverride}
+	}
+
+	// Set overrides if we have any
+	if len(overrides.ContainerOverrides) > 0 || overrides.TaskCount > 0 {
+		runReq.Overrides = overrides
+	}
+
+	op, err := client.RunJob(ctx, runReq)
 	if err != nil {
 		return "", err
 	}

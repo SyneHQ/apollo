@@ -29,7 +29,7 @@ func (s *JobsServer) Reload(ctx context.Context) {
 		}
 		spec := r.CronSpec
 		err := s.sched.Schedule(r.Name, spec, func(c context.Context) {
-			_, _ = s.runner.RunJob(c, req)
+			_, _ = s.runner.RunJob(c, s.cfg.Jobs.Cmd, req)
 		})
 		if err != nil {
 			log.Printf("failed to restore schedule for %s: %v", r.Name, err)

@@ -50,7 +50,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 	if r.Type == runner.JobTypeRepeatable && s.sched != nil && r.ScheduleSpec != "" {
 		name := r.Name
 		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) {
-			_, _ = s.runner.RunJob(c, r)
+			_, _ = s.runner.RunJob(c, s.cfg.Jobs.Cmd, r)
 		})
 		if err != nil {
 			return nil, err
@@ -67,7 +67,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		}
 		return &proto.RunJobResponse{Id: name, Logs: "scheduled"}, nil
 	}
-	id, err := s.runner.RunJob(ctx, r)
+	id, err := s.runner.RunJob(ctx, s.cfg.Jobs.Cmd, r)
 	if err != nil {
 		return nil, err
 	}

@@ -22,7 +22,7 @@ func main() {
 
 	failOnError := os.Getenv("ENVIRONMENT") != "development"
 
-	_, err := keys.NewInfisicalSecrets(failOnError)
+	secrets, err := keys.NewInfisicalSecrets(failOnError)
 
 	if err != nil {
 		if failOnError {
@@ -34,6 +34,7 @@ func main() {
 	log.Println("Loading config")
 
 	config, err := config.Load()
+
 	if err != nil {
 		panic(err)
 	}
@@ -42,9 +43,9 @@ func main() {
 	var r runner.Runner
 	switch config.JobsProvider {
 	case "cloudrun":
-		r = runner.NewCloudRunRunner(config.GCPProjectID, config.GCPRegion, config.Jobs.Image)
+		r = runner.NewCloudRunRunner(config.GCPProjectID, config.GCPRegion, config.Jobs.Image, *secrets)
 	default:
-		r = runner.NewLocalRunner(config.Jobs.Image)
+		r = runner.NewLocalRunner(config.Jobs.Image, *secrets)
 	}
 
 	// Start gRPC server
@@ -62,13 +63,19 @@ func main() {
 		}
 	}()
 
+	log.Printf("Server starting on port %s", config.Port)
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
+		log.Println("Shutting down server...")
 		grpcServer.GracefulStop()
-		// clean up your webserver here
-		// e.g. httpServer.Shutdown(ctx)
 		os.Exit(0)
 	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	<-c
+	log.Println("Shutting down server...")
+	grpcServer.GracefulStop()
 }

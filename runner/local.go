@@ -4,27 +4,59 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/infisical/go-sdk/packages/models"
 )
 
 type LocalRunner struct {
-	Image string
+	Image   string
+	Secrets []models.Secret
 }
 
-func NewLocalRunner(image string) *LocalRunner {
-	return &LocalRunner{Image: image}
+func NewLocalRunner(image string, secrets []models.Secret) *LocalRunner {
+	return &LocalRunner{Image: image, Secrets: secrets}
 }
 
-func (l *LocalRunner) RunJob(ctx context.Context, req JobRequest) (string, error) {
+func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (string, error) {
+	// Generate job ID if not provided
+	jobID := req.JobID
+	if jobID == "" {
+		jobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
+	}
+
 	// Run container using docker with bun command inside image
 	// Example: docker run --rm <image> rover <command> <argsBase64>
-	args := []string{"run", "--rm", l.Image, "/app/rover", req.Command}
-	if req.ArgsJSONBase64 != "" {
+	args := []string{"run", "--rm", l.Image, _cmd, req.Command}
+
+	// Use overrides if provided, otherwise use default args
+	if req.Overrides != nil && len(req.Overrides.Args) > 0 {
+		args = append(args, req.Overrides.Args...)
+	} else if req.ArgsJSONBase64 != "" {
 		args = append(args, req.ArgsJSONBase64)
 	}
+
 	args, err := l.LimitResources(ctx, req, args)
 	if err != nil {
+		fmt.Printf("Error limiting resources: %v\n", err)
 		return "", err
 	}
+
+	args, err = l.AppendSecrets(ctx, req, args)
+	if err != nil {
+		fmt.Printf("Error appending secrets: %v\n", err)
+		return "", err
+	}
+
+	args, err = l.AppendOverrides(ctx, req, args)
+	if err != nil {
+		fmt.Printf("Error appending overrides: %v\n", err)
+		return "", err
+	}
+
+	fmt.Printf("Running job %s with command: docker %s\n", jobID, strings.Join(args, " "))
+
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -33,9 +65,34 @@ func (l *LocalRunner) RunJob(ctx context.Context, req JobRequest) (string, error
 	return string(out), nil
 }
 
+func (l *LocalRunner) AppendSecrets(ctx context.Context, req JobRequest, args []string) ([]string, error) {
+	// Inject Infisical secrets as environment variables
+	for _, secret := range l.Secrets {
+		args = append(args, "-e", secret.SecretKey+"="+secret.SecretValue)
+	}
+	return args, nil
+}
+
 func (l *LocalRunner) LimitResources(ctx context.Context, req JobRequest, args []string) ([]string, error) {
+	// Use overrides if provided, otherwise use default resources
+	resources := req.Resources
+	if req.Overrides != nil && req.Overrides.Resources != nil {
+		resources = *req.Overrides.Resources
+	}
+
 	// we need to read memory and cpu limits and apply those limits
-	args = append(args, "--memory", req.Resources.Memory, "--cpus", req.Resources.CPU)
+	args = append(args, "--memory", resources.Memory, "--cpus", resources.CPU)
+	return args, nil
+}
+
+func (l *LocalRunner) AppendOverrides(ctx context.Context, req JobRequest, args []string) ([]string, error) {
+	// Append client-provided environment variables from overrides
+	// These will override Infisical secrets if there are conflicts
+	if req.Overrides != nil && len(req.Overrides.Env) > 0 {
+		for _, envVar := range req.Overrides.Env {
+			args = append(args, "-e", envVar.Name+"="+envVar.Value)
+		}
+	}
 	return args, nil
 }
 

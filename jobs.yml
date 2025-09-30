@@ -1,4 +1,5 @@
-image: ghcr.io/synehq/rover.ts:latest
+image: dramtic.worker:latest
+cmd: /app/rover
 
 backup:
   resources:

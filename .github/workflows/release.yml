@@ -4,7 +4,7 @@ on:
   push:
     branches: [sudo]
     paths:
-      - 'proto/generated/node/proto/jobs.ts'
+      - 'proto/generated/node/proto/**'
       - '.github/workflows/release.yml'
 
 jobs:

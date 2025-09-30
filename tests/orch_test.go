@@ -12,7 +12,7 @@ import (
 )
 
 const serverPort = "6910"
-const serverHost = "localhost"
+const serverHost = "20.84.120.130"
 
 func TestRunJobOneTime(t *testing.T) {
 	ctx := context.Background()
@@ -26,7 +26,8 @@ func TestRunJobOneTime(t *testing.T) {
 	client := proto.NewJobsServiceClient(conn)
 
 	// Prepare args and encode as base64 (empty for this test)
-	args := []byte{}
+
+	args := []byte("{}")
 	argsBase64 := base64.StdEncoding.EncodeToString(args)
 
 	jobRequest := &proto.RunJobRequest{
@@ -71,7 +72,7 @@ func TestRunJobRepeatable(t *testing.T) {
 
 	client := proto.NewJobsServiceClient(conn)
 
-	args := []byte{}
+	args := []byte("{}")
 	argsBase64 := base64.StdEncoding.EncodeToString(args)
 
 	jobRequest := &proto.RunJobRequest{

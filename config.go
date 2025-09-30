@@ -9,20 +9,25 @@ import (
 )
 
 type JobsConfig struct {
-	Cmd     string
-	Image   string
-	Backup  JobConfig
-	Restore JobConfig
-	Migrate JobConfig
+	Cmd     string         `yaml:"cmd"`
+	Image   string         `yaml:"image"`
+	Secrets []SecretConfig `yaml:"secrets"`
+	Jobs    []JobConfig    `yaml:"jobs"`
+}
+
+type SecretConfig struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 type JobConfig struct {
-	Resources ResourceConfig
+	Name      string         `yaml:"name"`
+	Resources ResourceConfig `yaml:"resources"`
 }
 
 type ResourceConfig struct {
-	Memory string
-	CPU    string
+	Memory string `yaml:"memory"`
+	CPU    string `yaml:"cpu"`
 }
 
 type StoreConfig struct {
@@ -87,14 +92,14 @@ func readYML() *JobsConfig {
 
 // GetResourcesFor returns resource config for a known job key
 func (c *Config) GetResourcesFor(jobName string) ResourceConfig {
-	switch jobName {
-	case "backup", "handleBackupJob", "handle_backup":
-		return c.Jobs.Backup.Resources
-	case "restore", "handleRestoreJob", "handle_restore":
-		return c.Jobs.Restore.Resources
-	case "migrate", "migrateJob", "migrate_job":
-		return c.Jobs.Migrate.Resources
-	default:
-		return ResourceConfig{}
+	for _, job := range c.Jobs.Jobs {
+		if job.Name == jobName {
+			return job.Resources
+		}
+	}
+
+	return ResourceConfig{
+		Memory: "256Mi",
+		CPU:    "250m",
 	}
 }

@@ -1,17 +1,34 @@
 image: ghcr.io/synehq/rover.ts:sudo
 cmd: /app/rover
 
-backup:
-  resources:
-    memory: "2Gi"
-    cpu: "1000m"
+secrets:
+  - name: DATABASE_URL
+    value: $DATABASE_URL
 
-restore:
-  resources:
-    memory: "4Gi"
-    cpu: "2000m"
+  - name: KMS_API_URL
+    value: $KMS_API_URL
 
-migrate:
-  resources:
-    memory: "5Gi"
-    cpu: "3000m"
+  - name: KORI_EMAIL_API_KEY
+    value: $KORI_EMAIL_API_KEY
+
+  - name: KORI_EMAIL_API_URL
+    value: $KORI_EMAIL_API_URL
+
+  - name: NODE_ENV
+    value: $NODE_ENV
+
+jobs:
+  - name: handleBackupJob
+    resources:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  - name: handleRestoreJob
+    resources:
+      memory: "4Gi"
+      cpu: "2000m"
+
+  - name: migrateJob
+    resources:
+      memory: "5Gi"
+      cpu: "3000m"

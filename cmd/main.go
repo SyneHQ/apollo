@@ -12,6 +12,7 @@ import (
 	"github.com/SyneHQ/apollo/keys"
 	"github.com/SyneHQ/apollo/proto"
 	"github.com/SyneHQ/apollo/runner"
+	_secrets "github.com/SyneHQ/apollo/secrets"
 	jobsserver "github.com/SyneHQ/apollo/server"
 	"google.golang.org/grpc"
 )
@@ -20,12 +21,12 @@ func main() {
 
 	log.Println("Starting Dramatic Jobs")
 
-	failOnError := os.Getenv("ENVIRONMENT") != "development"
+	useInfisical := os.Getenv("USE_INFISICAL") == "true"
 
-	secrets, err := keys.NewInfisicalSecrets(failOnError)
+	secrets, err := keys.NewInfisicalSecrets(useInfisical)
 
 	if err != nil {
-		if failOnError {
+		if useInfisical {
 			os.Exit(1)
 		}
 		log.Printf("Error loading infisical secrets: %v", err)
@@ -38,6 +39,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	secrets = _secrets.FilterSecrets(secrets, config.Jobs.Secrets)
 
 	// Choose runner
 	var r runner.Runner

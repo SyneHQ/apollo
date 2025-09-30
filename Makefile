@@ -1,5 +1,5 @@
 run: 
-	ENVIRONMENT=development go run cmd/main.go
+	export $(shell cat .env | xargs) && go run cmd/main.go
 
 test:
 	go test -count=1 ./...

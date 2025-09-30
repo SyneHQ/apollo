@@ -19,7 +19,7 @@ func (i *InfisicalSecrets) GetClient() infisical.InfisicalClientInterface {
 	return i.client
 }
 
-func NewInfisicalSecrets(exitOnError bool) (*[]models.Secret, error) {
+func NewInfisicalSecrets(exitOnError bool) ([]models.Secret, error) {
 	log.Printf("🔑 Line 18 - NewInfisicalSecrets: Starting Infisical client initialization")
 
 	client := infisical.NewInfisicalClient(context.Background(), infisical.Config{
@@ -62,5 +62,5 @@ func NewInfisicalSecrets(exitOnError bool) (*[]models.Secret, error) {
 	log.Printf("🎉 Line 54 - NewInfisicalSecrets: Infisical client successfully initialized and secrets loaded")
 
 	infisicalSecrets.secrets = sec
-	return &infisicalSecrets.secrets, nil
+	return infisicalSecrets.secrets, nil
 }

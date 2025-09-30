@@ -43,9 +43,9 @@ func main() {
 	var r runner.Runner
 	switch config.JobsProvider {
 	case "cloudrun":
-		r = runner.NewCloudRunRunner(config.GCPProjectID, config.GCPRegion, config.Jobs.Image, *secrets)
+		r = runner.NewCloudRunRunner(config.GCPProjectID, config.GCPRegion, config.Jobs.Image, secrets)
 	default:
-		r = runner.NewLocalRunner(config.Jobs.Image, *secrets)
+		r = runner.NewLocalRunner(config.Jobs.Image, secrets)
 	}
 
 	// Start gRPC server

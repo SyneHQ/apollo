@@ -55,6 +55,14 @@ jobs:
           NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
           jq --arg version "$NEW_VERSION" '.version = $version' package.json > tmp.json && mv tmp.json package.json
 
+      - name: Install dependencies
+        working-directory: proto/generated/node/proto
+        run: bun install
+
+      - name: Build package
+        working-directory: proto/generated/node/proto
+        run: bun run build
+
       - name: Commit version bump
         run: |
           git config --local user.email "action@github.com"
@@ -80,14 +88,6 @@ jobs:
             ```
           draft: false
           prerelease: false
-
-      - name: Install dependencies
-        working-directory: proto/generated/node/proto
-        run: bun install
-
-      - name: Build package
-        working-directory: proto/generated/node/proto
-        run: bun run build
         
       - name: Publish to NPM
         working-directory: proto/generated/node/proto

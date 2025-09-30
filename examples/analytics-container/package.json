@@ -1,0 +1,19 @@
+{
+  "name": "synehq-analytics",
+  "version": "1.0.0",
+  "description": "Analytics job container for SyneHQ Apollo",
+  "main": "index.ts",
+  "scripts": {
+    "start": "bun run index.ts",
+    "dev": "bun run --watch index.ts",
+    "build": "bun build index.ts --outdir dist --target bun"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "redis": "^4.6.10"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.10.0"
+  }
+}

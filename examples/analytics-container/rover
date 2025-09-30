@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# Rover script - Entry point for analytics container
+# This script handles different commands and passes arguments to the main application
+
+set -e
+
+# Default command
+COMMAND=${1:-"analytics"}
+
+# Shift to get remaining arguments
+shift || true
+
+# Execute the command with Bun
+exec bun run /app/index.ts "$COMMAND" "$@"

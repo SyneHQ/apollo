@@ -54,7 +54,7 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 		return "", err
 	}
 
-	fmt.Printf("Running job %s with command: docker %s\n", jobID, _cmd, req.Command)
+	fmt.Printf("Running job %s with command: docker %s %s\n", jobID, _cmd, req.Command)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	out, err := cmd.CombinedOutput()

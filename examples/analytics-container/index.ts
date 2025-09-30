@@ -180,9 +180,9 @@ async function executeReportJob(db: Database, params: AnalyticsJobParams): Promi
     userId: params.userId,
     timestamp: new Date().toISOString(),
     metrics: {
-      totalUsers: parseInt(results[0].total_users),
-      activeUsers: parseInt(results[1].active_users),
-      newUsers: parseInt(results[2].new_users)
+      totalUsers: parseInt((results[0] as any)?.total_users ?? '0', 10),
+      activeUsers: parseInt((results[1] as any)?.active_users ?? '0', 10),
+      newUsers: parseInt((results[2] as any)?.new_users ?? '0', 10)
     }
   };
   

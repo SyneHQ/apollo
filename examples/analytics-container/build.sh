@@ -60,8 +60,11 @@ build_container() {
         exit 1
     fi
     
+    root_folder=$(pwd)
+    cd "${root_folder}/examples/analytics-container"
+
     # Build the image
-    docker build -t "${FULL_IMAGE_NAME}" .
+    docker build -t "${FULL_IMAGE_NAME}" -f Dockerfile .
     
     if [ $? -eq 0 ]; then
         print_success "Container image built successfully: ${FULL_IMAGE_NAME}"

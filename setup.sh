@@ -60,10 +60,29 @@ else
     echo "Docker Swarm already initialized."
 fi
 
+echo ""
+echo "Which deployment do you want to set up?"
+echo "1) Cloud Run (cloudrun image)"
+echo "2) Local Docker (localrun image)"
+read -p "Enter 1 for Cloud Run or 2 for Localrun [2]: " DEPLOY_CHOICE
+
+ENABLE_DOCKER_SOCK_MOUNT = "0"
+
+DEPLOY_CHOICE="${DEPLOY_CHOICE:-2}"
+
+if [[ "$DEPLOY_CHOICE" == "1" ]]; then
+    IMAGE_NAME="synehq/apollo-cloudrun"
+    SERVICE_NAME="apollo-cloudrun"
+    echo "You have selected Cloud Run setup. Using image: $IMAGE_NAME"
+else
+    IMAGE_NAME="synehq/apollo-localrun"
+    SERVICE_NAME="apollo"
+    ENABLE_DOCKER_SOCK_MOUNT = "1"
+    echo "You have selected Localrun setup. Using image: $IMAGE_NAME"
+fi
+
 # 5. Set variables for your image
 REGISTRY="ghcr.io"
-IMAGE_NAME="synehq/apollo-localrun" # <-- CHANGE THIS
-SERVICE_NAME="apollo"
 TAG="sudo" # or set to a specific tag
 
 read -p "Which port do you want to expose the service on? [6910]: " PORT_TO_EXPOSE
@@ -130,12 +149,19 @@ if docker service ls | grep -q "$SERVICE_NAME"; then
 fi
 
 echo "Creating new service with correct port publishing..."
+
+DOCKER_MOUNT_FLAG=()
+if [ "$ENABLE_DOCKER_SOCK_MOUNT" = "1" ] || [ "$ENABLE_DOCKER_SOCK_MOUNT" = "true" ]; then
+    DOCKER_MOUNT_FLAG+=(--mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock)
+fi
+
 if [ ${#ENV_CREATE_FLAGS[@]} -gt 0 ]; then
     docker service create \
         --name $SERVICE_NAME \
         --replicas 1 \
         --with-registry-auth \
         --publish mode=host,target=$PORT_TO_EXPOSE,published=$PORT_TO_EXPOSE,protocol=tcp \
+        "${DOCKER_MOUNT_FLAG[@]}" \
         "${ENV_CREATE_FLAGS[@]}" \
         $REGISTRY/$IMAGE_NAME:$TAG
 else
@@ -144,6 +170,7 @@ else
         --replicas 1 \
         --with-registry-auth \
         --publish mode=host,target=$PORT_TO_EXPOSE,published=$PORT_TO_EXPOSE,protocol=tcp \
+        "${DOCKER_MOUNT_FLAG[@]}" \
         $REGISTRY/$IMAGE_NAME:$TAG
 fi
 

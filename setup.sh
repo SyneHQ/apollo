@@ -66,7 +66,7 @@ echo "1) Cloud Run (cloudrun image)"
 echo "2) Local Docker (localrun image)"
 read -p "Enter 1 for Cloud Run or 2 for Localrun [2]: " DEPLOY_CHOICE
 
-ENABLE_DOCKER_SOCK_MOUNT = "0"
+ENABLE_DOCKER_SOCK_MOUNT="0"
 
 DEPLOY_CHOICE="${DEPLOY_CHOICE:-2}"
 
@@ -77,7 +77,7 @@ if [[ "$DEPLOY_CHOICE" == "1" ]]; then
 else
     IMAGE_NAME="synehq/apollo-localrun"
     SERVICE_NAME="apollo"
-    ENABLE_DOCKER_SOCK_MOUNT = "1"
+    ENABLE_DOCKER_SOCK_MOUNT="1"
     echo "You have selected Localrun setup. Using image: $IMAGE_NAME"
 fi
 

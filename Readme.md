@@ -16,6 +16,19 @@ Ever tried running a massive data migration and had it fail halfway through? Or 
 - 📊 **Real-time monitoring** - Track your jobs with detailed logs and status updates
 - 🔧 **gRPC API** - Fast, type-safe communication
 
+### Server Setup
+
+```bash
+curl https://apollo.lynxlab.tech/setup.sh | sudo bash
+```
+
+You'll be asked 
+
+- Which deployment type you want (Cloud Run or Local Docker)
+- Which port to expose the service on (default: 6910)
+- Whether to log in to GHCR (GitHub Container Registry)
+- Path to your jobs config file (optional)
+
 ### Client usage
 
 [For Node click here](/proto/generated/node/proto/README.md)

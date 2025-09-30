@@ -56,6 +56,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			if r.JobID == "" {
 				r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
 			}
+			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, s.cfg.Jobs.Cmd, r.Command)
 			result, runErr := s.runner.RunJob(c, s.cfg.Jobs.Cmd, r)
 			end := time.Now().Unix()
 			s.recordExecution(c, r, r.JobID, result, runErr, start, end)
@@ -78,6 +79,8 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 	if r.JobID == "" {
 		r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
 	}
+
+	log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, s.cfg.Jobs.Cmd, r.Command)
 
 	result, err := s.runner.RunJob(ctx, s.cfg.Jobs.Cmd, r)
 	end := time.Now().Unix()

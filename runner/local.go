@@ -18,27 +18,11 @@ func NewLocalRunner(image string, secrets []models.Secret) *LocalRunner {
 }
 
 func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (string, error) {
-	// Generate job ID if not provided
-	jobID := req.JobID
-
 	// Run container using docker with bun command inside image
 	// Example: docker run --rm <image> rover <command> <argsBase64>
-	args := []string{"run", "--rm", l.Image, _cmd, req.Command}
+	args := []string{"run", "--rm"}
 
-	// Use overrides if provided, otherwise use default args
-	if req.Overrides != nil && len(req.Overrides.Args) > 0 {
-		args = append(args, req.Overrides.Args...)
-	} else if req.ArgsJSONBase64 != "" {
-		args = append(args, req.ArgsJSONBase64)
-	}
-
-	args, err := l.LimitResources(ctx, req, args)
-	if err != nil {
-		fmt.Printf("Error limiting resources: %v\n", err)
-		return "", err
-	}
-
-	args, err = l.AppendSecrets(ctx, req, args)
+	args, err := l.AppendSecrets(ctx, req, args)
 	if err != nil {
 		fmt.Printf("Error appending secrets: %v\n", err)
 		return "", err
@@ -50,7 +34,22 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 		return "", err
 	}
 
-	fmt.Printf("Running job %s with command: docker\n", jobID)
+	args = append(args, l.Image, _cmd, req.Command)
+
+	if req.ArgsJSONBase64 != "" {
+		args = append(args, req.ArgsJSONBase64)
+	}
+
+	args, err = l.LimitResources(ctx, req, args)
+	if err != nil {
+		fmt.Printf("Error limiting resources: %v\n", err)
+		return "", err
+	}
+
+	// Use overrides if provided, otherwise use default args
+	if req.Overrides != nil && len(req.Overrides.Args) > 0 {
+		args = append(args, req.Overrides.Args...)
+	}
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 

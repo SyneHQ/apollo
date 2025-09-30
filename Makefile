@@ -1,6 +1,9 @@
 run: 
 	export $(shell cat .env | xargs) && go run cmd/main.go
 
+dev:
+	export $(shell cat .env | xargs) && export INFISICAL_ENV=dev && go run cmd/main.go
+
 test:
 	go test -count=1 ./...
 

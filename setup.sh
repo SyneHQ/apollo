@@ -38,7 +38,7 @@ REGISTRY="ghcr.io"
 IMAGE_NAME="synehq/apollo-localrun" # <-- CHANGE THIS
 SERVICE_NAME="apollo"
 TAG="sudo" # or set to a specific tag
-
+PORT_TO_EXPOSE="${PORT_TO_EXPOSE:-6910}"
 # 6a. Load environment variables from a file (optional)
 # Place key=value pairs in .env (or set ENV_FILE to a different path)
 ENV_FILE=${ENV_FILE:-.env}
@@ -59,12 +59,28 @@ fi
 
 # 6. Login to GHCR (GitHub Container Registry)
 echo "Logging in to GHCR..."
-echo "Enter your GitHub Personal Access Token (with 'read:packages' scope):"
-read -s GHCR_TOKEN
-echo "Enter your GitHub Username:"
-read -s GHCR_USERNAME
-if ! echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin; then
-    echo "GHCR login failed. Please check your token and try again."
+
+read -p "Do you want to log in to GHCR (GitHub Container Registry)? [y/N]: " GHCR_LOGIN_CHOICE
+GHCR_LOGIN_CHOICE=${GHCR_LOGIN_CHOICE,,} # to lower case
+
+if [[ "$GHCR_LOGIN_CHOICE" == "y" || "$GHCR_LOGIN_CHOICE" == "yes" ]]; then
+    # Use existing GHCR_TOKEN and GHCR_USERNAME if set, otherwise prompt the user
+    if [ -z "$GHCR_TOKEN" ]; then
+        echo "Enter your GitHub Personal Access Token (with 'read:packages' scope):"
+        read -s GHCR_TOKEN
+    fi
+
+    if [ -z "$GHCR_USERNAME" ]; then
+        echo "Enter your GitHub Username:"
+        read -r GHCR_USERNAME
+    fi
+
+    if ! echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin; then
+        echo "GHCR login failed. Please check your token and try again."
+        exit 1
+    fi
+else
+    echo "Skipping GHCR login. Make sure you are already logged in if you want to pull private images."
 fi
 
 # 7. Deploy or update the Docker Swarm service
@@ -74,6 +90,7 @@ if docker service ls | grep -q "$SERVICE_NAME"; then
         docker service update \
             --image $REGISTRY/$IMAGE_NAME:$TAG \
             --with-registry-auth \
+            -p $PORT_TO_EXPOSE:$PORT_TO_EXPOSE \
             "${ENV_UPDATE_FLAGS[@]}" \
             $SERVICE_NAME
     else
@@ -86,6 +103,7 @@ else
             --name $SERVICE_NAME \
             --replicas 1 \
             --with-registry-auth \
+            -p $PORT_TO_EXPOSE:$PORT_TO_EXPOSE \
             "${ENV_CREATE_FLAGS[@]}" \
             $REGISTRY/$IMAGE_NAME:$TAG
     else
@@ -93,6 +111,7 @@ else
             --name $SERVICE_NAME \
             --replicas 1 \
             --with-registry-auth \
+            -p $PORT_TO_EXPOSE:$PORT_TO_EXPOSE \
             $REGISTRY/$IMAGE_NAME:$TAG
     fi
 fi

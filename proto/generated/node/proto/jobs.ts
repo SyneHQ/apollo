@@ -96,7 +96,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): Resources {
+        static deserializeBinary(bytes: Uint8Array): Resources {
             return Resources.deserialize(bytes);
         }
     }
@@ -104,17 +104,22 @@ export namespace jobs {
         #one_of_decls: number[][] = [];
         constructor(data?: any[] | {
             name?: string;
+            job_id?: string;
             command?: string;
             args_base64?: string;
             resources?: Resources;
             type?: JobType;
             schedule?: string;
+            overrides?: JobOverrides;
         }) {
             super();
             pb_1.Message.initialize(this, Array.isArray(data) ? data : [], 0, -1, [], this.#one_of_decls);
             if (!Array.isArray(data) && typeof data == "object") {
                 if ("name" in data && data.name != undefined) {
                     this.name = data.name;
+                }
+                if ("job_id" in data && data.job_id != undefined) {
+                    this.job_id = data.job_id;
                 }
                 if ("command" in data && data.command != undefined) {
                     this.command = data.command;
@@ -131,6 +136,9 @@ export namespace jobs {
                 if ("schedule" in data && data.schedule != undefined) {
                     this.schedule = data.schedule;
                 }
+                if ("overrides" in data && data.overrides != undefined) {
+                    this.overrides = data.overrides;
+                }
             }
         }
         get name() {
@@ -139,50 +147,70 @@ export namespace jobs {
         set name(value: string) {
             pb_1.Message.setField(this, 1, value);
         }
-        get command() {
+        get job_id() {
             return pb_1.Message.getFieldWithDefault(this, 2, "") as string;
         }
-        set command(value: string) {
+        set job_id(value: string) {
             pb_1.Message.setField(this, 2, value);
         }
-        get args_base64() {
+        get command() {
             return pb_1.Message.getFieldWithDefault(this, 3, "") as string;
         }
-        set args_base64(value: string) {
+        set command(value: string) {
             pb_1.Message.setField(this, 3, value);
         }
+        get args_base64() {
+            return pb_1.Message.getFieldWithDefault(this, 4, "") as string;
+        }
+        set args_base64(value: string) {
+            pb_1.Message.setField(this, 4, value);
+        }
         get resources() {
-            return pb_1.Message.getWrapperField(this, Resources, 4) as Resources;
+            return pb_1.Message.getWrapperField(this, Resources, 5) as Resources;
         }
         set resources(value: Resources) {
-            pb_1.Message.setWrapperField(this, 4, value);
+            pb_1.Message.setWrapperField(this, 5, value);
         }
         get has_resources() {
-            return pb_1.Message.getField(this, 4) != null;
+            return pb_1.Message.getField(this, 5) != null;
         }
         get type() {
-            return pb_1.Message.getFieldWithDefault(this, 5, JobType.JOB_TYPE_ONE_TIME) as JobType;
+            return pb_1.Message.getFieldWithDefault(this, 6, JobType.JOB_TYPE_ONE_TIME) as JobType;
         }
         set type(value: JobType) {
-            pb_1.Message.setField(this, 5, value);
+            pb_1.Message.setField(this, 6, value);
         }
         get schedule() {
-            return pb_1.Message.getFieldWithDefault(this, 6, "") as string;
+            return pb_1.Message.getFieldWithDefault(this, 7, "") as string;
         }
         set schedule(value: string) {
-            pb_1.Message.setField(this, 6, value);
+            pb_1.Message.setField(this, 7, value);
+        }
+        get overrides() {
+            return pb_1.Message.getWrapperField(this, JobOverrides, 8) as JobOverrides;
+        }
+        set overrides(value: JobOverrides) {
+            pb_1.Message.setWrapperField(this, 8, value);
+        }
+        get has_overrides() {
+            return pb_1.Message.getField(this, 8) != null;
         }
         static fromObject(data: {
             name?: string;
+            job_id?: string;
             command?: string;
             args_base64?: string;
             resources?: ReturnType<typeof Resources.prototype.toObject>;
             type?: JobType;
             schedule?: string;
+            overrides?: ReturnType<typeof JobOverrides.prototype.toObject>;
         }): RunJobRequest {
             const message = new RunJobRequest({});
             if (data.name != null) {
                 message.name = data.name;
+            }
+            if (data.job_id != null) {
+                message.job_id = data.job_id;
             }
             if (data.command != null) {
                 message.command = data.command;
@@ -199,19 +227,27 @@ export namespace jobs {
             if (data.schedule != null) {
                 message.schedule = data.schedule;
             }
+            if (data.overrides != null) {
+                message.overrides = JobOverrides.fromObject(data.overrides);
+            }
             return message;
         }
         toObject() {
             const data: {
                 name?: string;
+                job_id?: string;
                 command?: string;
                 args_base64?: string;
                 resources?: ReturnType<typeof Resources.prototype.toObject>;
                 type?: JobType;
                 schedule?: string;
+                overrides?: ReturnType<typeof JobOverrides.prototype.toObject>;
             } = {};
             if (this.name != null) {
                 data.name = this.name;
+            }
+            if (this.job_id != null) {
+                data.job_id = this.job_id;
             }
             if (this.command != null) {
                 data.command = this.command;
@@ -228,6 +264,9 @@ export namespace jobs {
             if (this.schedule != null) {
                 data.schedule = this.schedule;
             }
+            if (this.overrides != null) {
+                data.overrides = this.overrides.toObject();
+            }
             return data;
         }
         serialize(): Uint8Array;
@@ -236,16 +275,20 @@ export namespace jobs {
             const writer = w || new pb_1.BinaryWriter();
             if (this.name.length)
                 writer.writeString(1, this.name);
+            if (this.job_id.length)
+                writer.writeString(2, this.job_id);
             if (this.command.length)
-                writer.writeString(2, this.command);
+                writer.writeString(3, this.command);
             if (this.args_base64.length)
-                writer.writeString(3, this.args_base64);
+                writer.writeString(4, this.args_base64);
             if (this.has_resources)
-                writer.writeMessage(4, this.resources, () => this.resources.serialize(writer));
+                writer.writeMessage(5, this.resources, () => this.resources.serialize(writer));
             if (this.type != JobType.JOB_TYPE_ONE_TIME)
-                writer.writeEnum(5, this.type);
+                writer.writeEnum(6, this.type);
             if (this.schedule.length)
-                writer.writeString(6, this.schedule);
+                writer.writeString(7, this.schedule);
+            if (this.has_overrides)
+                writer.writeMessage(8, this.overrides, () => this.overrides.serialize(writer));
             if (!w)
                 return writer.getResultBuffer();
         }
@@ -259,19 +302,25 @@ export namespace jobs {
                         message.name = reader.readString();
                         break;
                     case 2:
-                        message.command = reader.readString();
+                        message.job_id = reader.readString();
                         break;
                     case 3:
-                        message.args_base64 = reader.readString();
+                        message.command = reader.readString();
                         break;
                     case 4:
-                        reader.readMessage(message.resources, () => message.resources = Resources.deserialize(reader));
+                        message.args_base64 = reader.readString();
                         break;
                     case 5:
-                        message.type = reader.readEnum();
+                        reader.readMessage(message.resources, () => message.resources = Resources.deserialize(reader));
                         break;
                     case 6:
+                        message.type = reader.readEnum();
+                        break;
+                    case 7:
                         message.schedule = reader.readString();
+                        break;
+                    case 8:
+                        reader.readMessage(message.overrides, () => message.overrides = JobOverrides.deserialize(reader));
                         break;
                     default: reader.skipField();
                 }
@@ -281,8 +330,237 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): RunJobRequest {
+        static deserializeBinary(bytes: Uint8Array): RunJobRequest {
             return RunJobRequest.deserialize(bytes);
+        }
+    }
+    export class JobOverrides extends pb_1.Message {
+        #one_of_decls: number[][] = [];
+        constructor(data?: any[] | {
+            args?: string[];
+            env?: EnvVar[];
+            resources?: Resources;
+            task_count?: number;
+        }) {
+            super();
+            pb_1.Message.initialize(this, Array.isArray(data) ? data : [], 0, -1, [1, 2], this.#one_of_decls);
+            if (!Array.isArray(data) && typeof data == "object") {
+                if ("args" in data && data.args != undefined) {
+                    this.args = data.args;
+                }
+                if ("env" in data && data.env != undefined) {
+                    this.env = data.env;
+                }
+                if ("resources" in data && data.resources != undefined) {
+                    this.resources = data.resources;
+                }
+                if ("task_count" in data && data.task_count != undefined) {
+                    this.task_count = data.task_count;
+                }
+            }
+        }
+        get args() {
+            return pb_1.Message.getFieldWithDefault(this, 1, []) as string[];
+        }
+        set args(value: string[]) {
+            pb_1.Message.setField(this, 1, value);
+        }
+        get env() {
+            return pb_1.Message.getRepeatedWrapperField(this, EnvVar, 2) as EnvVar[];
+        }
+        set env(value: EnvVar[]) {
+            pb_1.Message.setRepeatedWrapperField(this, 2, value);
+        }
+        get resources() {
+            return pb_1.Message.getWrapperField(this, Resources, 3) as Resources;
+        }
+        set resources(value: Resources) {
+            pb_1.Message.setWrapperField(this, 3, value);
+        }
+        get has_resources() {
+            return pb_1.Message.getField(this, 3) != null;
+        }
+        get task_count() {
+            return pb_1.Message.getFieldWithDefault(this, 4, 0) as number;
+        }
+        set task_count(value: number) {
+            pb_1.Message.setField(this, 4, value);
+        }
+        static fromObject(data: {
+            args?: string[];
+            env?: ReturnType<typeof EnvVar.prototype.toObject>[];
+            resources?: ReturnType<typeof Resources.prototype.toObject>;
+            task_count?: number;
+        }): JobOverrides {
+            const message = new JobOverrides({});
+            if (data.args != null) {
+                message.args = data.args;
+            }
+            if (data.env != null) {
+                message.env = data.env.map(item => EnvVar.fromObject(item));
+            }
+            if (data.resources != null) {
+                message.resources = Resources.fromObject(data.resources);
+            }
+            if (data.task_count != null) {
+                message.task_count = data.task_count;
+            }
+            return message;
+        }
+        toObject() {
+            const data: {
+                args?: string[];
+                env?: ReturnType<typeof EnvVar.prototype.toObject>[];
+                resources?: ReturnType<typeof Resources.prototype.toObject>;
+                task_count?: number;
+            } = {};
+            if (this.args != null) {
+                data.args = this.args;
+            }
+            if (this.env != null) {
+                data.env = this.env.map((item: EnvVar) => item.toObject());
+            }
+            if (this.resources != null) {
+                data.resources = this.resources.toObject();
+            }
+            if (this.task_count != null) {
+                data.task_count = this.task_count;
+            }
+            return data;
+        }
+        serialize(): Uint8Array;
+        serialize(w: pb_1.BinaryWriter): void;
+        serialize(w?: pb_1.BinaryWriter): Uint8Array | void {
+            const writer = w || new pb_1.BinaryWriter();
+            if (this.args.length)
+                writer.writeRepeatedString(1, this.args);
+            if (this.env.length)
+                writer.writeRepeatedMessage(2, this.env, (item: EnvVar) => item.serialize(writer));
+            if (this.has_resources)
+                writer.writeMessage(3, this.resources, () => this.resources.serialize(writer));
+            if (this.task_count != 0)
+                writer.writeInt32(4, this.task_count);
+            if (!w)
+                return writer.getResultBuffer();
+        }
+        static deserialize(bytes: Uint8Array | pb_1.BinaryReader): JobOverrides {
+            const reader = bytes instanceof pb_1.BinaryReader ? bytes : new pb_1.BinaryReader(bytes), message = new JobOverrides();
+            while (reader.nextField()) {
+                if (reader.isEndGroup())
+                    break;
+                switch (reader.getFieldNumber()) {
+                    case 1:
+                        pb_1.Message.addToRepeatedField(message, 1, reader.readString());
+                        break;
+                    case 2:
+                        reader.readMessage(message.env, () => pb_1.Message.addToRepeatedWrapperField(message, 2, EnvVar.deserialize(reader), EnvVar));
+                        break;
+                    case 3:
+                        reader.readMessage(message.resources, () => message.resources = Resources.deserialize(reader));
+                        break;
+                    case 4:
+                        message.task_count = reader.readInt32();
+                        break;
+                    default: reader.skipField();
+                }
+            }
+            return message;
+        }
+        serializeBinary(): Uint8Array {
+            return this.serialize();
+        }
+        static deserializeBinary(bytes: Uint8Array): JobOverrides {
+            return JobOverrides.deserialize(bytes);
+        }
+    }
+    export class EnvVar extends pb_1.Message {
+        #one_of_decls: number[][] = [];
+        constructor(data?: any[] | {
+            name?: string;
+            value?: string;
+        }) {
+            super();
+            pb_1.Message.initialize(this, Array.isArray(data) ? data : [], 0, -1, [], this.#one_of_decls);
+            if (!Array.isArray(data) && typeof data == "object") {
+                if ("name" in data && data.name != undefined) {
+                    this.name = data.name;
+                }
+                if ("value" in data && data.value != undefined) {
+                    this.value = data.value;
+                }
+            }
+        }
+        get name() {
+            return pb_1.Message.getFieldWithDefault(this, 1, "") as string;
+        }
+        set name(value: string) {
+            pb_1.Message.setField(this, 1, value);
+        }
+        get value() {
+            return pb_1.Message.getFieldWithDefault(this, 2, "") as string;
+        }
+        set value(value: string) {
+            pb_1.Message.setField(this, 2, value);
+        }
+        static fromObject(data: {
+            name?: string;
+            value?: string;
+        }): EnvVar {
+            const message = new EnvVar({});
+            if (data.name != null) {
+                message.name = data.name;
+            }
+            if (data.value != null) {
+                message.value = data.value;
+            }
+            return message;
+        }
+        toObject() {
+            const data: {
+                name?: string;
+                value?: string;
+            } = {};
+            if (this.name != null) {
+                data.name = this.name;
+            }
+            if (this.value != null) {
+                data.value = this.value;
+            }
+            return data;
+        }
+        serialize(): Uint8Array;
+        serialize(w: pb_1.BinaryWriter): void;
+        serialize(w?: pb_1.BinaryWriter): Uint8Array | void {
+            const writer = w || new pb_1.BinaryWriter();
+            if (this.name.length)
+                writer.writeString(1, this.name);
+            if (this.value.length)
+                writer.writeString(2, this.value);
+            if (!w)
+                return writer.getResultBuffer();
+        }
+        static deserialize(bytes: Uint8Array | pb_1.BinaryReader): EnvVar {
+            const reader = bytes instanceof pb_1.BinaryReader ? bytes : new pb_1.BinaryReader(bytes), message = new EnvVar();
+            while (reader.nextField()) {
+                if (reader.isEndGroup())
+                    break;
+                switch (reader.getFieldNumber()) {
+                    case 1:
+                        message.name = reader.readString();
+                        break;
+                    case 2:
+                        message.value = reader.readString();
+                        break;
+                    default: reader.skipField();
+                }
+            }
+            return message;
+        }
+        serializeBinary(): Uint8Array {
+            return this.serialize();
+        }
+        static deserializeBinary(bytes: Uint8Array): EnvVar {
+            return EnvVar.deserialize(bytes);
         }
     }
     export class RunJobResponse extends pb_1.Message {
@@ -371,7 +649,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): RunJobResponse {
+        static deserializeBinary(bytes: Uint8Array): RunJobResponse {
             return RunJobResponse.deserialize(bytes);
         }
     }
@@ -438,7 +716,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): DeleteJobRequest {
+        static deserializeBinary(bytes: Uint8Array): DeleteJobRequest {
             return DeleteJobRequest.deserialize(bytes);
         }
     }
@@ -478,7 +756,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): DeleteJobResponse {
+        static deserializeBinary(bytes: Uint8Array): DeleteJobResponse {
             return DeleteJobResponse.deserialize(bytes);
         }
     }
@@ -568,7 +846,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): UpdateScheduleRequest {
+        static deserializeBinary(bytes: Uint8Array): UpdateScheduleRequest {
             return UpdateScheduleRequest.deserialize(bytes);
         }
     }
@@ -608,7 +886,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): UpdateScheduleResponse {
+        static deserializeBinary(bytes: Uint8Array): UpdateScheduleResponse {
             return UpdateScheduleResponse.deserialize(bytes);
         }
     }
@@ -648,7 +926,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): ListSchedulesRequest {
+        static deserializeBinary(bytes: Uint8Array): ListSchedulesRequest {
             return ListSchedulesRequest.deserialize(bytes);
         }
     }
@@ -810,7 +1088,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): ScheduleItem {
+        static deserializeBinary(bytes: Uint8Array): ScheduleItem {
             return ScheduleItem.deserialize(bytes);
         }
     }
@@ -877,7 +1155,7 @@ export namespace jobs {
         serializeBinary(): Uint8Array {
             return this.serialize();
         }
-        static override deserializeBinary(bytes: Uint8Array): ListSchedulesResponse {
+        static deserializeBinary(bytes: Uint8Array): ListSchedulesResponse {
             return ListSchedulesResponse.deserialize(bytes);
         }
     }
@@ -955,19 +1233,15 @@ export namespace jobs {
             super(address, credentials, options);
         }
         RunJob: GrpcUnaryServiceInterface<RunJobRequest, RunJobResponse> = (message: RunJobRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<RunJobResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<RunJobResponse>, callback?: grpc_1.requestCallback<RunJobResponse>): grpc_1.ClientUnaryCall => {
-            // @ts-ignore
             return super.RunJob(message, metadata, options, callback);
         };
         DeleteJob: GrpcUnaryServiceInterface<DeleteJobRequest, DeleteJobResponse> = (message: DeleteJobRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<DeleteJobResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<DeleteJobResponse>, callback?: grpc_1.requestCallback<DeleteJobResponse>): grpc_1.ClientUnaryCall => {
-            // @ts-ignore
             return super.DeleteJob(message, metadata, options, callback);
         };
         UpdateSchedule: GrpcUnaryServiceInterface<UpdateScheduleRequest, UpdateScheduleResponse> = (message: UpdateScheduleRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<UpdateScheduleResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<UpdateScheduleResponse>, callback?: grpc_1.requestCallback<UpdateScheduleResponse>): grpc_1.ClientUnaryCall => {
-            // @ts-ignore
             return super.UpdateSchedule(message, metadata, options, callback);
         };
         ListSchedules: GrpcUnaryServiceInterface<ListSchedulesRequest, ListSchedulesResponse> = (message: ListSchedulesRequest, metadata: grpc_1.Metadata | grpc_1.CallOptions | grpc_1.requestCallback<ListSchedulesResponse>, options?: grpc_1.CallOptions | grpc_1.requestCallback<ListSchedulesResponse>, callback?: grpc_1.requestCallback<ListSchedulesResponse>): grpc_1.ClientUnaryCall => {
-            // @ts-ignore
             return super.ListSchedules(message, metadata, options, callback);
         };
     }

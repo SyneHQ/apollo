@@ -10,11 +10,25 @@ enum JobType { JOB_TYPE_ONE_TIME = 0; JOB_TYPE_REPEATABLE = 1; }
 
 message RunJobRequest {
   string name = 1;
-  string command = 2; // e.g., "ack", "migrateJob", etc.
-  string args_base64 = 3;
-  Resources resources = 4;
-  JobType type = 5;
-  string schedule = 6; // cron or duration string
+  string job_id = 2; // Optional: if not provided, will be auto-generated
+  string command = 3; // e.g., "ack", "migrateJob", etc.
+  string args_base64 = 4;
+  Resources resources = 5;
+  JobType type = 6;
+  string schedule = 7; // cron or duration string
+  JobOverrides overrides = 8; // Optional runtime overrides
+}
+
+message JobOverrides {
+  repeated string args = 1; // Override container args
+  repeated EnvVar env = 2; // Override environment variables
+  Resources resources = 3; // Override resource limits
+  int32 task_count = 4; // Override task count for parallel execution
+}
+
+message EnvVar {
+  string name = 1;
+  string value = 2;
 }
 
 message RunJobResponse { string id = 1; string logs = 2; }
@@ -26,7 +40,7 @@ message UpdateScheduleRequest { string name = 1; string schedule = 2; }
 message UpdateScheduleResponse {}
 
 message ListSchedulesRequest {}
-message ScheduleItem { string name = 1; string command = 2; string args_base64 = 3; string cron = 4; Resources resources = 5; }
+message ScheduleItem { string name = 1;   string command = 2; string args_base64 = 3; string cron = 4; Resources resources = 5; }
 message ListSchedulesResponse { repeated ScheduleItem items = 1; }
 
 service JobsService {

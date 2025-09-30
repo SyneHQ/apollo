@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strings"
-	"time"
 
 	"github.com/infisical/go-sdk/packages/models"
 )
@@ -22,9 +20,6 @@ func NewLocalRunner(image string, secrets []models.Secret) *LocalRunner {
 func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (string, error) {
 	// Generate job ID if not provided
 	jobID := req.JobID
-	if jobID == "" {
-		jobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
-	}
 
 	// Run container using docker with bun command inside image
 	// Example: docker run --rm <image> rover <command> <argsBase64>
@@ -55,7 +50,7 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 		return "", err
 	}
 
-	fmt.Printf("Running job %s with command: docker %s\n", jobID, strings.Join(args, " "))
+	fmt.Printf("Running job %s with command: docker\n", jobID)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 

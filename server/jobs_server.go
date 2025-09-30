@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	cfg "github.com/SyneHQ/apollo"
 	"github.com/SyneHQ/apollo/proto"
@@ -21,10 +22,10 @@ type JobsServer struct {
 func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
 	var sch *scheduler.Scheduler
 	var st *scheduler.Store
-	if c.JobsProvider == "local" {
+	if c.JobsProvider == "local" && c.Store.Driver != "" && c.Store.Path != "" {
 		sch = scheduler.New()
 		// best-effort open local sqlite at ./jobs.db
-		s, err := scheduler.OpenStore("jobs.db")
+		s, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
 		if err == nil {
 			st = s
 		}
@@ -50,28 +51,65 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 	if r.Type == runner.JobTypeRepeatable && s.sched != nil && r.ScheduleSpec != "" {
 		name := r.Name
 		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) {
-			_, _ = s.runner.RunJob(c, s.cfg.Jobs.Cmd, r)
+			start := time.Now().Unix()
+			if r.JobID == "" {
+				r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
+			}
+			result, runErr := s.runner.RunJob(c, s.cfg.Jobs.Cmd, r)
+			end := time.Now().Unix()
+			s.recordExecution(c, r, r.JobID, result, runErr, start, end)
 		})
 		if err != nil {
 			return nil, err
 		}
 		if s.store != nil {
 			_ = s.store.Upsert(ctx, scheduler.JobRecord{
-				Name:       r.Name,
-				Command:    r.Command,
-				ArgsBase64: r.ArgsJSONBase64,
-				CronSpec:   r.ScheduleSpec,
-				Cpu:        r.Resources.CPU,
-				Memory:     r.Resources.Memory,
+				Name:    r.Name,
+				Command: r.Command,
+				Cpu:     r.Resources.CPU,
+				Memory:  r.Resources.Memory,
 			})
 		}
 		return &proto.RunJobResponse{Id: name, Logs: "scheduled"}, nil
 	}
-	id, err := s.runner.RunJob(ctx, s.cfg.Jobs.Cmd, r)
+	start := time.Now().Unix()
+
+	if r.JobID == "" {
+		r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
+	}
+
+	result, err := s.runner.RunJob(ctx, s.cfg.Jobs.Cmd, r)
+	end := time.Now().Unix()
+	s.recordExecution(ctx, r, r.JobID, result, err, start, end)
 	if err != nil {
 		return nil, err
 	}
-	return &proto.RunJobResponse{Id: id, Logs: ""}, nil
+	return &proto.RunJobResponse{Id: r.JobID, Logs: result}, nil
+}
+
+func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, id string, result string, runErr error, start, end int64) {
+	if s.store == nil {
+		return
+	}
+	rec := scheduler.ExecutionRecord{
+		ID:         id,
+		Name:       r.Name,
+		Command:    r.Command,
+		ArgsBase64: r.ArgsJSONBase64,
+		Cpu:        r.Resources.CPU,
+		Memory:     r.Resources.Memory,
+		Status:     map[bool]string{true: "error", false: "success"}[runErr != nil],
+		Error: func() string {
+			if runErr != nil {
+				return runErr.Error()
+			}
+			return ""
+		}(),
+		Result:     result,
+		StartedAt:  start,
+		FinishedAt: end,
+	}
+	_ = s.store.AddExecution(ctx, rec)
 }
 
 func (s *JobsServer) DeleteJob(ctx context.Context, req *proto.DeleteJobRequest) (*proto.DeleteJobResponse, error) {

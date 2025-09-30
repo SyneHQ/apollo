@@ -3,11 +3,11 @@ package runner
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
-	"time"
 
-	run "cloud.google.com/go/run/apiv2"
-	rpb "cloud.google.com/go/run/apiv2/runpb"
+	batch "cloud.google.com/go/batch/apiv1"
+	batchpb "cloud.google.com/go/batch/apiv1/batchpb"
 	scheduler "cloud.google.com/go/scheduler/apiv1"
 	spb "cloud.google.com/go/scheduler/apiv1/schedulerpb"
 	"github.com/infisical/go-sdk/packages/models"
@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-type CloudRunRunner struct {
+type BatchRunner struct {
 	ProjectID string
 	Region    string
 	Image     string
@@ -26,193 +26,236 @@ type CloudRunRunner struct {
 	// Optional service account email for Cloud Scheduler HTTP OAuth
 	ServiceAccountEmail string
 	Secrets             []models.Secret
+	// Storage configuration
+	PersistentDiskName string
+	PersistentDiskSize int64
+	PersistentDiskType string
 }
 
-func NewCloudRunRunner(projectID, region, image string, secrets []models.Secret) *CloudRunRunner {
-	return &CloudRunRunner{ProjectID: projectID, Region: region, Image: image, Secrets: secrets}
-}
-
-func (c *CloudRunRunner) jobName(id string) string {
-	return fmt.Sprintf("projects/%s/locations/%s/jobs/%s", c.ProjectID, c.Region, id)
-}
-
-func (c *CloudRunRunner) parent() string {
-	return fmt.Sprintf("projects/%s/locations/%s", c.ProjectID, c.Region)
-}
-
-func (c *CloudRunRunner) ensureJob(ctx context.Context, client *run.JobsClient, cmd string, req JobRequest) error {
-	name := c.jobName(req.Name)
-	// Check if job exists
-	if _, err := client.GetJob(ctx, &rpb.GetJobRequest{Name: name}); err != nil {
-		if status.Code(err) != codes.NotFound {
-			return err
-		}
-
-		// Create new job
-		job := &rpb.Job{
-			Name: name,
-			Template: &rpb.ExecutionTemplate{
-				Template: &rpb.TaskTemplate{
-					Containers: []*rpb.Container{
-						{
-							Image: c.Image,
-							Command: []string{
-								cmd,
-							},
-							Resources: &rpb.ResourceRequirements{Limits: map[string]string{
-								"cpu":    req.Resources.CPU,
-								"memory": req.Resources.Memory,
-							}},
-						},
-					},
-					Retries: &rpb.TaskTemplate_MaxRetries{MaxRetries: 3},
-					Timeout: &durationpb.Duration{Seconds: 24 * 60 * 60},
-				},
-			},
-		}
-		op, err := client.CreateJob(ctx, &rpb.CreateJobRequest{Parent: c.parent(), Job: job, JobId: req.Name})
-		if err != nil {
-			return err
-		}
-		if _, err := op.Wait(ctx); err != nil {
-			return err
-		}
-		return nil
+func NewBatchRunner(projectID, region, image string, secrets []models.Secret) *BatchRunner {
+	return &BatchRunner{
+		ProjectID:          projectID,
+		Region:             region,
+		Image:              image,
+		Secrets:            secrets,
+		PersistentDiskSize: 64,            // Default 64GB
+		PersistentDiskType: "pd-balanced", // Default balanced disk
 	}
-	// TODO: Optionally update job if resources/command changed
-	return nil
 }
 
-func (c *CloudRunRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (string, error) {
-	client, err := run.NewJobsClient(ctx, c.ClientOptions...)
+func (b *BatchRunner) jobName(id string) string {
+	return fmt.Sprintf("projects/%s/locations/%s/jobs/%s", b.ProjectID, b.Region, id)
+}
+
+func (b *BatchRunner) parent() string {
+	return fmt.Sprintf("projects/%s/locations/%s", b.ProjectID, b.Region)
+}
+
+func (b *BatchRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (string, error) {
+	client, err := batch.NewClient(ctx, b.ClientOptions...)
 	if err != nil {
 		return "", err
 	}
 	defer client.Close()
 
-	// Generate job ID if not provided
-	jobID := req.JobID
-	if jobID == "" {
-		jobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
+	// Build environment variables as a map[string]string
+	envMap := make(map[string]string)
+	// Add Infisical secrets
+	for _, secret := range b.Secrets {
+		envMap[secret.SecretKey] = secret.SecretValue
 	}
-
-	if err := c.ensureJob(ctx, client, cmd, req); err != nil {
-		return "", err
-	}
-
-	// Build run request with overrides
-	runReq := &rpb.RunJobRequest{Name: c.jobName(req.Name)}
-
-	// Always inject Infisical secrets, and apply client overrides if provided
-	overrides := &rpb.RunJobRequest_Overrides{}
-	containerOverride := &rpb.RunJobRequest_Overrides_ContainerOverride{}
-
-	// Combine Infisical secrets and client-provided environment variables
-	// Client overrides will take precedence over Infisical secrets
-	allEnvVars := make([]*rpb.EnvVar, 0, len(c.Secrets))
-	if req.Overrides != nil {
-		allEnvVars = make([]*rpb.EnvVar, 0, len(c.Secrets)+len(req.Overrides.Env))
-	}
-
-	// First add Infisical secrets
-	for _, secret := range c.Secrets {
-		allEnvVars = append(allEnvVars, &rpb.EnvVar{
-			Name: secret.SecretKey,
-			Values: &rpb.EnvVar_Value{
-				Value: secret.SecretValue,
-			},
-		})
-	}
-
-	// Then add client-provided environment variables (these will override Infisical secrets)
+	// Add client-provided environment variables
 	if req.Overrides != nil && len(req.Overrides.Env) > 0 {
 		for _, envVar := range req.Overrides.Env {
-			allEnvVars = append(allEnvVars, &rpb.EnvVar{
-				Name: envVar.Name,
-				Values: &rpb.EnvVar_Value{
-					Value: envVar.Value,
-				},
-			})
+			envMap[envVar.Name] = envVar.Value
 		}
 	}
 
-	// Set environment variables if we have any
-	if len(allEnvVars) > 0 {
-		containerOverride.Env = allEnvVars
+	// Define the runnable (script or container)
+	var containerArgs []string
+	if req.Overrides != nil && len(req.Overrides.Args) > 0 {
+		containerArgs = req.Overrides.Args
+	}
+	runnable := &batchpb.Runnable{
+		Executable: &batchpb.Runnable_Container_{
+			Container: &batchpb.Runnable_Container{
+				ImageUri: b.Image,
+				Commands: []string{cmd},
+				Options:  strings.Join(containerArgs, " "),
+			},
+		},
+		Environment: &batchpb.Environment{
+			Variables: envMap,
+		},
 	}
 
-	// Apply client overrides if provided
-	if req.Overrides != nil {
-		// Override args
-		if len(req.Overrides.Args) > 0 {
-			containerOverride.Args = req.Overrides.Args
+	// Configure storage volumes if persistent disk is specified
+	var volumes []*batchpb.Volume
+	var attachedDisks []*batchpb.AllocationPolicy_AttachedDisk
+
+	if b.PersistentDiskName != "" {
+		volume := &batchpb.Volume{
+			MountPath: fmt.Sprintf("/mnt/disks/%s", b.PersistentDiskName),
+			Source: &batchpb.Volume_DeviceName{
+				DeviceName: b.PersistentDiskName,
+			},
+			MountOptions: []string{"rw", "async"},
+		}
+		volumes = append(volumes, volume)
+
+		disk := &batchpb.AllocationPolicy_Disk{
+			Type:   b.PersistentDiskType,
+			SizeGb: b.PersistentDiskSize,
 		}
 
-		// Override task count
-		if req.Overrides.TaskCount > 0 {
-			overrides.TaskCount = req.Overrides.TaskCount
+		attachedDisk := &batchpb.AllocationPolicy_AttachedDisk{
+			Attached: &batchpb.AllocationPolicy_AttachedDisk_NewDisk{
+				NewDisk: disk,
+			},
+			DeviceName: b.PersistentDiskName,
 		}
+		attachedDisks = append(attachedDisks, attachedDisk)
 	}
 
-	// Set container overrides if we have any
-	if len(containerOverride.Args) > 0 || len(containerOverride.Env) > 0 {
-		overrides.ContainerOverrides = []*rpb.RunJobRequest_Overrides_ContainerOverride{containerOverride}
+	// Define task specification
+	taskSpec := &batchpb.TaskSpec{
+		ComputeResource: &batchpb.ComputeResource{
+			CpuMilli:  parseCPU(req.Resources.CPU),
+			MemoryMib: parseMemory(req.Resources.Memory),
+		},
+		MaxRunDuration: &durationpb.Duration{Seconds: 24 * 60 * 60}, // 24 hours
+		MaxRetryCount:  3,
+		Runnables:      []*batchpb.Runnable{runnable},
+		Volumes:        volumes,
 	}
 
-	// Set overrides if we have any
-	if len(overrides.ContainerOverrides) > 0 || overrides.TaskCount > 0 {
-		runReq.Overrides = overrides
+	// Task count from overrides or default to 1
+	taskCount := int64(1)
+	if req.Overrides != nil && req.Overrides.TaskCount > 0 {
+		taskCount = int64(req.Overrides.TaskCount)
 	}
 
-	op, err := client.RunJob(ctx, runReq)
+	taskGroup := &batchpb.TaskGroup{
+		TaskCount: taskCount,
+		TaskSpec:  taskSpec,
+	}
+
+	// Define allocation policy
+	instancePolicy := &batchpb.AllocationPolicy_InstancePolicy{
+		MachineType: "n1-standard-1", // Default machine type
+		Disks:       attachedDisks,
+	}
+
+	allocationPolicy := &batchpb.AllocationPolicy{
+		Instances: []*batchpb.AllocationPolicy_InstancePolicyOrTemplate{{
+			PolicyTemplate: &batchpb.AllocationPolicy_InstancePolicyOrTemplate_Policy{
+				Policy: instancePolicy,
+			},
+		}},
+	}
+
+	// Create and submit the job
+	job := &batchpb.Job{
+		TaskGroups:       []*batchpb.TaskGroup{taskGroup},
+		AllocationPolicy: allocationPolicy,
+		Labels:           map[string]string{"env": "production", "type": "batch"},
+		LogsPolicy: &batchpb.LogsPolicy{
+			Destination: batchpb.LogsPolicy_CLOUD_LOGGING,
+		},
+	}
+
+	createReq := &batchpb.CreateJobRequest{
+		Parent: b.parent(),
+		JobId:  req.Name,
+		Job:    job,
+	}
+
+	op, err := client.CreateJob(ctx, createReq)
 	if err != nil {
 		return "", err
 	}
-	exec, err := op.Wait(ctx)
-	if err != nil {
-		return "", err
-	}
-	return exec.GetName(), nil
+
+	return op.GetName(), nil
 }
 
-func (c *CloudRunRunner) DeleteJob(ctx context.Context, name string) error {
-	client, err := run.NewJobsClient(ctx, c.ClientOptions...)
+func (b *BatchRunner) DeleteJob(ctx context.Context, name string) error {
+	client, err := batch.NewClient(ctx, b.ClientOptions...)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-	op, err := client.DeleteJob(ctx, &rpb.DeleteJobRequest{Name: c.jobName(name)})
+
+	op, err := client.DeleteJob(ctx, &batchpb.DeleteJobRequest{
+		Name: b.jobName(name),
+	})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return nil
 		}
 		return err
 	}
-	_, err = op.Wait(ctx)
+	err = op.Wait(ctx)
 	return err
 }
 
-func (c *CloudRunRunner) UpdateSchedule(ctx context.Context, name string, spec string) error {
-	sched, err := scheduler.NewCloudSchedulerClient(ctx, c.ClientOptions...)
+func (b *BatchRunner) UpdateSchedule(ctx context.Context, name string, spec string) error {
+	sched, err := scheduler.NewCloudSchedulerClient(ctx, b.ClientOptions...)
 	if err != nil {
 		return err
 	}
 	defer sched.Close()
 
-	parent := fmt.Sprintf("projects/%s/locations/%s", c.ProjectID, c.Region)
+	parent := fmt.Sprintf("projects/%s/locations/%s", b.ProjectID, b.Region)
 	jobName := fmt.Sprintf("%s/jobs/%s", parent, name)
 
-	// GCP Cron supports 5-fields; map from 6-field by dropping seconds if present
+	// Convert cron spec to 5-field format
 	cronSpec := toFiveFieldCron(spec)
 
-	// Target: HTTP call to Run Job API
-	// POST https://run.googleapis.com/v2/projects/{project}/locations/{region}/jobs/{job}:run
-	url := fmt.Sprintf("https://run.googleapis.com/v2/%s:run", jobName)
+	// Target: HTTP call to Batch API
+	url := fmt.Sprintf("https://batch.googleapis.com/v1/projects/%s/locations/%s/jobs", b.ProjectID, b.Region)
+
+	// Create the job configuration as JSON body
+	jobConfig := fmt.Sprintf(`{
+        "job_id": "%s",
+        "job": {
+            "task_groups": [
+                {
+                    "task_count": 1,
+                    "task_spec": {
+                        "runnables": [
+                            {
+                                "container": {
+                                    "image_uri": "%s"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "allocation_policy": {
+                "instances": [
+                    {
+                        "policy": {
+                            "machine_type": "n1-standard-1"
+                        }
+                    }
+                ]
+            }
+        }
+    }`, name, b.Image)
+
 	httpTarget := &spb.HttpTarget{
 		HttpMethod: spb.HttpMethod_POST,
 		Uri:        url,
-		// Use OIDC token with provided service account
-		AuthorizationHeader: &spb.HttpTarget_OidcToken{OidcToken: &spb.OidcToken{ServiceAccountEmail: c.ServiceAccountEmail}},
+		AuthorizationHeader: &spb.HttpTarget_OidcToken{
+			OidcToken: &spb.OidcToken{
+				ServiceAccountEmail: b.ServiceAccountEmail,
+			},
+		},
+		Body: []byte(jobConfig),
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
 	}
 
 	desired := &spb.Job{
@@ -220,7 +263,7 @@ func (c *CloudRunRunner) UpdateSchedule(ctx context.Context, name string, spec s
 		Schedule:    cronSpec,
 		TimeZone:    "UTC",
 		Target:      &spb.Job_HttpTarget{HttpTarget: httpTarget},
-		Description: "Run Cloud Run Job",
+		Description: "Run Batch Job",
 	}
 
 	// Try get existing
@@ -228,13 +271,46 @@ func (c *CloudRunRunner) UpdateSchedule(ctx context.Context, name string, spec s
 		if status.Code(err) != codes.NotFound {
 			return err
 		}
-		// create
+		// Create new
 		_, err := sched.CreateJob(ctx, &spb.CreateJobRequest{Parent: parent, Job: desired})
 		return err
 	}
-	// update
+	// Update existing
 	_, err = sched.UpdateJob(ctx, &spb.UpdateJobRequest{Job: desired})
 	return err
+}
+
+// Helper functions
+func parseCPU(cpu string) int64 {
+	// Convert CPU string (e.g., "1000m" or "1") to milliseconds
+	if strings.HasSuffix(cpu, "m") {
+		cpu = strings.TrimSuffix(cpu, "m")
+		if val, err := strconv.ParseInt(cpu, 10, 64); err == nil {
+			return val
+		}
+	}
+	if val, err := strconv.ParseInt(cpu, 10, 64); err == nil {
+		return val * 1000 // Convert cores to millicores
+	}
+	return 1000 // Default to 1 core
+}
+
+func parseMemory(memory string) int64 {
+	// Convert memory string (e.g., "1Gi", "1024Mi") to MiB
+	memory = strings.ToUpper(memory)
+	if strings.HasSuffix(memory, "GI") {
+		memory = strings.TrimSuffix(memory, "GI")
+		if val, err := strconv.ParseInt(memory, 10, 64); err == nil {
+			return val * 1024 // Convert GiB to MiB
+		}
+	}
+	if strings.HasSuffix(memory, "MI") {
+		memory = strings.TrimSuffix(memory, "MI")
+		if val, err := strconv.ParseInt(memory, 10, 64); err == nil {
+			return val
+		}
+	}
+	return 512 // Default to 512 MiB
 }
 
 func toFiveFieldCron(in string) string {

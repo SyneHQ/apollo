@@ -3,7 +3,7 @@ module github.com/SyneHQ/apollo
 go 1.24.4
 
 require (
-	cloud.google.com/go/run v1.12.0
+	cloud.google.com/go/batch v1.12.2
 	cloud.google.com/go/scheduler v1.11.8
 	github.com/infisical/go-sdk v0.5.100
 	github.com/joho/godotenv v1.5.1
@@ -54,6 +54,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/lib/pq v1.10.9
 	github.com/oracle/oci-go-sdk/v65 v65.95.2 // indirect
 	github.com/sony/gobreaker v0.5.0 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect

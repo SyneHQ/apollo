@@ -25,10 +25,15 @@ type ResourceConfig struct {
 	CPU    string
 }
 
+type StoreConfig struct {
+	Driver string
+	Path   string
+}
+
 type Config struct {
 	KMSAddress   string
 	Port         string
-	DatabaseURL  string
+	Store        StoreConfig
 	Environment  string
 	Jobs         JobsConfig
 	JobsProvider string // "cloudrun" or "local"
@@ -48,7 +53,7 @@ func Load() (*Config, error) {
 	return &Config{
 		Port:         getEnv("PORT", "6910"),
 		Environment:  getEnv("ENVIRONMENT", "development"),
-		DatabaseURL:  getEnv("DATABASE_URL", "postgres://syneuser:synehq@mbp:5432/synehq?sslmode=require"),
+		Store:        StoreConfig{Driver: getEnv("STORE_DRIVER", "sqlite"), Path: getEnv("STORE_PATH", "jobs.db")},
 		Jobs:         *jobs,
 		JobsProvider: getEnv("JOBS_PROVIDER", "local"),
 		GCPProjectID: getEnv("GCP_PROJECT_ID", ""),

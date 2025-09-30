@@ -12,7 +12,7 @@ import (
 )
 
 const serverPort = "6910"
-const serverHost = "20.84.120.130"
+const serverHost = "localhost"
 
 func TestRunJobOneTime(t *testing.T) {
 	ctx := context.Background()

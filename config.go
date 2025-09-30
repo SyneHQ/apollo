@@ -64,8 +64,12 @@ func getEnv(key, defaultValue string) string {
 }
 
 func readYML() *JobsConfig {
+	// file can be on /app/jobs.yml or jobs.yml
 	// load and parse jobs.yml file
-	yml, err := os.ReadFile("jobs.yml")
+	yml, err := os.ReadFile("/app/jobs.yml")
+	if err != nil {
+		yml, err = os.ReadFile("jobs.yml")
+	}
 	if err != nil {
 		return &JobsConfig{}
 	}

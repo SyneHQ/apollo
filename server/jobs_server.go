@@ -45,7 +45,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 	}
 	// default resources if not provided
 	if r.Resources.CPU == "" && r.Resources.Memory == "" {
-		res := s.cfg.GetResourcesFor(r.Name)
+		res := s.cfg.GetResourcesFor(r.Command)
 		r.Resources.CPU = res.CPU
 		r.Resources.Memory = res.Memory
 	}

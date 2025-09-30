@@ -1,4 +1,4 @@
-image: dramtic.worker:latest
+image: ghcr.io/synehq/rover.ts:sudo
 cmd: /app/rover
 
 backup:

@@ -65,12 +65,20 @@ REGISTRY="ghcr.io"
 IMAGE_NAME="synehq/apollo-localrun" # <-- CHANGE THIS
 SERVICE_NAME="apollo"
 TAG="sudo" # or set to a specific tag
+
+read -p "Which port do you want to expose the service on? [6910]: " PORT_TO_EXPOSE
+
 PORT_TO_EXPOSE="${PORT_TO_EXPOSE:-6910}"
+
+echo "Port to expose: $PORT_TO_EXPOSE"
+
+PORT_TO_EXPOSE="${PORT_TO_EXPOSE:-6910}"
+
 # 6a. Load environment variables from a file (optional)
-# Place key=value pairs in .env (or set ENV_FILE to a different path)
 ENV_FILE=${ENV_FILE:-.env}
-ENV_CREATE_FLAGS=(--env "ENVIRONMENT=development")
-ENV_UPDATE_FLAGS=(--env-add "ENVIRONMENT=development")
+ENV_CREATE_FLAGS=(--env "ENVIRONMENT=development" --env "PORT=$PORT_TO_EXPOSE")
+ENV_UPDATE_FLAGS=(--env-add "ENVIRONMENT=development" --env "PORT=$PORT_TO_EXPOSE")
+
 if [ -f "$ENV_FILE" ]; then
     echo "Loading environment variables from $ENV_FILE"
     while IFS= read -r line || [ -n "$line" ]; do
@@ -78,7 +86,6 @@ if [ -f "$ENV_FILE" ]; then
         case "$line" in
             ''|\#*) continue ;;
         esac
-        # Preserve full KEY=VALUE (do not export to avoid expanding $VAR references prematurely)
         ENV_CREATE_FLAGS+=("--env" "$line")
         ENV_UPDATE_FLAGS+=("--env-add" "$line")
     done < "$ENV_FILE"
@@ -91,7 +98,6 @@ read -p "Do you want to log in to GHCR (GitHub Container Registry)? [y/N]: " GHC
 GHCR_LOGIN_CHOICE=${GHCR_LOGIN_CHOICE,,} # to lower case
 
 if [[ "$GHCR_LOGIN_CHOICE" == "y" || "$GHCR_LOGIN_CHOICE" == "yes" ]]; then
-    # Use existing GHCR_TOKEN and GHCR_USERNAME if set, otherwise prompt the user
     if [ -z "$GHCR_TOKEN" ]; then
         echo "Enter your GitHub Personal Access Token (with 'read:packages' scope):"
         read -s GHCR_TOKEN
@@ -112,42 +118,33 @@ fi
 
 # 7. Deploy or update the Docker Swarm service
 # Expose port 6910:6910 using Docker Swarm's --publish mode
+
+# Remove the service if it exists, to ensure port publishing is correct
 if docker service ls | grep -q "$SERVICE_NAME"; then
-    echo "Updating existing service..."
-    if [ ${#ENV_UPDATE_FLAGS[@]} -gt 0 ]; then
-        docker service update \
-            --image $REGISTRY/$IMAGE_NAME:$TAG \
-            --with-registry-auth \
-            --publish-rm $PORT_TO_EXPOSE:6910 \
-            --publish-add $PORT_TO_EXPOSE:6910 \
-            "${ENV_UPDATE_FLAGS[@]}" \
-            $SERVICE_NAME
-    else
-        docker service update \
-            --image $REGISTRY/$IMAGE_NAME:$TAG \
-            --with-registry-auth \
-            --publish-rm $PORT_TO_EXPOSE:6910 \
-            --publish-add $PORT_TO_EXPOSE:6910 \
-            $SERVICE_NAME
-    fi
+    echo "Removing existing service to ensure port publishing is correct..."
+    docker service rm $SERVICE_NAME
+    # Wait for the service to be fully removed
+    while docker service ls | grep -q "$SERVICE_NAME"; do
+        sleep 1
+    done
+fi
+
+echo "Creating new service with correct port publishing..."
+if [ ${#ENV_CREATE_FLAGS[@]} -gt 0 ]; then
+    docker service create \
+        --name $SERVICE_NAME \
+        --replicas 1 \
+        --with-registry-auth \
+        --publish mode=host,target=$PORT_TO_EXPOSE,published=$PORT_TO_EXPOSE,protocol=tcp \
+        "${ENV_CREATE_FLAGS[@]}" \
+        $REGISTRY/$IMAGE_NAME:$TAG
 else
-    echo "Creating new service..."
-    if [ ${#ENV_CREATE_FLAGS[@]} -gt 0 ]; then
-        docker service create \
-            --name $SERVICE_NAME \
-            --replicas 1 \
-            --with-registry-auth \
-            --publish $PORT_TO_EXPOSE:6910 \
-            "${ENV_CREATE_FLAGS[@]}" \
-            $REGISTRY/$IMAGE_NAME:$TAG
-    else
-        docker service create \
-            --name $SERVICE_NAME \
-            --replicas 1 \
-            --with-registry-auth \
-            --publish $PORT_TO_EXPOSE:6910 \
-            $REGISTRY/$IMAGE_NAME:$TAG
-    fi
+    docker service create \
+        --name $SERVICE_NAME \
+        --replicas 1 \
+        --with-registry-auth \
+        --publish mode=host,target=$PORT_TO_EXPOSE,published=$PORT_TO_EXPOSE,protocol=tcp \
+        $REGISTRY/$IMAGE_NAME:$TAG
 fi
 
 # 8. Set up Watchtower for automatic image updates

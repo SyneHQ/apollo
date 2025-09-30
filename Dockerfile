@@ -1,6 +1,8 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
+ENV PORT=6910
+
 # Set working directory
 WORKDIR /app
 
@@ -24,7 +26,7 @@ COPY --from=builder /app/main /app/main
 COPY --from=builder /app/jobs.yml /app/jobs.yml
 
 # Expose port (adjust as needed)
-EXPOSE 6901
+EXPOSE $PORT
 
 ENV JOBS_PROVIDER='local'
 

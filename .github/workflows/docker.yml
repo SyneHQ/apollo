@@ -41,7 +41,7 @@ jobs:
 
       - name: Pre-Build tests
         run: |
-          echo 'ENVIRONMENT=development' > .env && make pre-build
+          echo 'USE_INFISICAL=false' > .env && make pre-build
 
   build-and-push:
     runs-on: ubuntu-latest

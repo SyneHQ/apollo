@@ -65,7 +65,6 @@ echo "Enter your GitHub Username:"
 read -s GHCR_USERNAME
 if ! echo "$GHCR_TOKEN" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin; then
     echo "GHCR login failed. Please check your token and try again."
-    exit 1
 fi
 
 # 7. Deploy or update the Docker Swarm service

@@ -83,7 +83,8 @@ func TestRunJobRepeatable(t *testing.T) {
 			Cpu:    "500m",
 			Memory: "1Gi",
 		},
-		Type: proto.JobType_JOB_TYPE_REPEATABLE,
+		Schedule: "0 */1 * * * *",
+		Type:     proto.JobType_JOB_TYPE_REPEATABLE,
 		Overrides: &proto.JobOverrides{
 			Args: []string{},
 			Env:  []*proto.EnvVar{{Name: "EXAMPLE_ENV", Value: "repeat"}},
@@ -95,19 +96,29 @@ func TestRunJobRepeatable(t *testing.T) {
 		},
 	}
 
-	for i := 0; i < 3; i++ {
-		t.Logf("Running ack job iteration %d", i+1)
+	t.Logf("Running ack job repeatable")
 
-		result, err := client.RunJob(ctx, jobRequest)
-		if err != nil {
-			t.Logf("Job execution failed on iteration %d (this may be expected if server is not running): %v", i+1, err)
-			t.Skip("Skipping test - server may not be running or job execution failed")
-			return
-		}
-
-		t.Logf("Repeatable ack job iteration %d result: %s", i+1, result.Logs)
-		time.Sleep(100 * time.Millisecond)
+	result, err := client.RunJob(ctx, jobRequest)
+	if err != nil {
+		t.Logf("Job execution failed on iteration (this may be expected if server is not running): %v", err)
+		t.Skip("Skipping test - server may not be running or job execution failed")
+		return
 	}
+
+	t.Logf("Repeatable ack job result: %s", result.Logs)
+
+	// after 2 mins delete the job
+
+	time.Sleep(2 * time.Minute)
+
+	_, err = client.DeleteJob(ctx, &proto.DeleteJobRequest{Name: "ack-job-repeatable"})
+	if err != nil {
+		t.Logf("Job deletion failed: %v", err)
+		t.Skip("Skipping test - server may not be running or job deletion failed")
+		return
+	}
+
+	t.Logf("Job deleted successfully")
 }
 
 func TestRunJobWithSchedule(t *testing.T) {

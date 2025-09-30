@@ -5,10 +5,12 @@ on:
     branches: [ sudo ]
     paths:
       - '**.go'
+      - 'Dockerfile'
   pull_request:
     branches: [ sudo ]
     paths:
       - '**.go'
+      - 'Dockerfile'
 
 env:
   REGISTRY: ghcr.io
@@ -55,20 +57,40 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
+    - name: Extract metadata for cloudrun image
+      id: meta_cloudrun
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cloudrun
         tags: |
           type=ref,event=branch
           type=ref,event=pr
           type=sha
 
-    - name: Build and push Docker image
+    - name: Extract metadata for local image
+      id: meta_local
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-localrun
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+
+    - name: Build and push cloudrun Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
+        file: cloud.Dockerfile
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: ${{ steps.meta_cloudrun.outputs.tags }}
+        labels: ${{ steps.meta_cloudrun.outputs.labels }}
+
+    - name: Build and push local Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: Dockerfile
+        push: true
+        tags: ${{ steps.meta_local.outputs.tags }}
+        labels: ${{ steps.meta_local.outputs.labels }}

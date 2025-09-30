@@ -1,0 +1,67 @@
+Database seeded successfully!
+Users: 8
+Sessions: 203
+Events: 500
+Products: 20
+Orders: 100
+🚀 Starting analytics job with parameters: {
+  queryType: "export",
+  database: "analytics",
+  outputFormat: "json",
+  executionId: "test-exec-123",
+  userId: "test-user-456",
+}
+📊 Environment variables:
+  - DATABASE_PATH: /app/analytics.db
+  - API_KEY: ***configured***
+  - REDIS_URL: ***configured***
+  - LOG_LEVEL: debug
+📤 Executing export job for database: analytics
+✅ Export completed: 3 records
+✅ Result cached in Redis
+📧 Sending notification: {
+  executionId: "test-exec-123",
+  userId: "test-user-456",
+  queryType: "export",
+  status: "completed",
+  timestamp: "2025-09-30T04:55:39.169Z",
+  result: {
+    recordCount: 3,
+  },
+}
+✅ Notification sent successfully
+
+📄 Job Result (JSON):
+{
+  "queryType": "export",
+  "database": "analytics",
+  "outputFormat": "json",
+  "recordCount": 3,
+  "executionId": "test-exec-123",
+  "userId": "test-user-456",
+  "timestamp": "2025-09-30T04:55:39.168Z",
+  "data": [
+    {
+      "id": 6,
+      "name": "Recent User 1",
+      "created_at": "2025-09-29 04:55:39",
+      "updated_at": "2025-09-30 04:55:39"
+    },
+    {
+      "id": 7,
+      "name": "Recent User 2",
+      "created_at": "2025-09-28 04:55:39",
+      "updated_at": "2025-09-30 04:55:39"
+    },
+    {
+      "id": 8,
+      "name": "Recent User 3",
+      "created_at": "2025-09-27 04:55:39",
+      "updated_at": "2025-09-30 04:55:39"
+    }
+  ]
+}
+
+🎉 Analytics job completed successfully!
+[SUCCESS] Container test completed successfully!
+[SUCCESS] All requested operations completed successfully!

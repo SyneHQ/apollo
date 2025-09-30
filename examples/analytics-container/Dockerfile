@@ -2,7 +2,7 @@
 FROM oven/bun:alpine
 
 # Install Redis and SQLite
-RUN apk add --no-cache redis sqlite python3
+RUN apk add --no-cache redis sqlite
 
 # Set working directory
 WORKDIR /app
@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy application files
 COPY . .
@@ -23,7 +23,7 @@ RUN chmod +x /app/rover
 RUN echo '#!/bin/sh' > /app/start.sh && \
     echo 'redis-server --daemonize yes' >> /app/start.sh && \
     echo 'sqlite3 /app/analytics.db < /app/seed.sql' >> /app/start.sh && \
-    echo 'exec /app/rover analytics' >> /app/start.sh && \
+    echo 'exec bun run index.ts analytics --query-type export --database analytics --output-format json' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 # Create entrypoint script to handle different commands

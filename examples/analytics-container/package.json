@@ -9,11 +9,10 @@
     "build": "bun build index.ts --outdir dist --target bun"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
     "redis": "^4.6.10"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.8",
+    "@types/bun": "latest",
     "@types/node": "^20.10.0"
   }
 }

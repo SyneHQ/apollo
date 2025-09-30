@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { createClient } from 'redis';
 
 // Types for job parameters
@@ -15,7 +15,7 @@ interface AnalyticsJobParams {
 
 // Parse command line arguments
 function parseArgs(): AnalyticsJobParams {
-  const args = process.argv.slice(2);
+  const args = process.argv.slice(3); // Skip 'bun', 'index.ts', and 'analytics'
   const params: Partial<AnalyticsJobParams> = {};
   
   for (let i = 0; i < args.length; i += 2) {
@@ -48,12 +48,12 @@ function parseArgs(): AnalyticsJobParams {
 }
 
 // Database connection
-async function getDatabaseConnection(): Promise<Database.Database> {
+async function getDatabaseConnection(): Promise<Database> {
   const databasePath = process.env.DATABASE_PATH || '/app/analytics.db';
   const db = new Database(databasePath);
   
   // Enable WAL mode for better concurrency
-  db.pragma('journal_mode = WAL');
+  db.exec('PRAGMA journal_mode = WAL');
   
   return db;
 }
@@ -126,7 +126,7 @@ async function executeAnalyticsJob(params: AnalyticsJobParams): Promise<any> {
 }
 
 // Export job implementation
-async function executeExportJob(db: Database.Database, params: AnalyticsJobParams): Promise<any> {
+async function executeExportJob(db: Database, params: AnalyticsJobParams): Promise<any> {
   console.log(`📤 Executing export job for database: ${params.database}`);
   
   // Simulate database query - SQLite compatible
@@ -142,7 +142,7 @@ async function executeExportJob(db: Database.Database, params: AnalyticsJobParam
     LIMIT 1000
   `;
   
-  const result = db.prepare(query).all();
+  const result = db.query(query).all();
   
   const exportData = {
     queryType: params.queryType,
@@ -160,7 +160,7 @@ async function executeExportJob(db: Database.Database, params: AnalyticsJobParam
 }
 
 // Report job implementation
-async function executeReportJob(db: Database.Database, params: AnalyticsJobParams): Promise<any> {
+async function executeReportJob(db: Database, params: AnalyticsJobParams): Promise<any> {
   console.log(`📊 Executing report job for database: ${params.database}`);
   
   // Simulate report generation - SQLite compatible
@@ -170,7 +170,7 @@ async function executeReportJob(db: Database.Database, params: AnalyticsJobParam
     'SELECT COUNT(*) as new_users FROM users WHERE created_at >= datetime(\'now\', \'-7 days\')'
   ];
   
-  const results = queries.map(query => db.prepare(query).get());
+  const results = queries.map(query => db.query(query).get());
   
   const reportData = {
     queryType: params.queryType,
@@ -191,7 +191,7 @@ async function executeReportJob(db: Database.Database, params: AnalyticsJobParam
 }
 
 // Aggregation job implementation
-async function executeAggregationJob(db: Database.Database, params: AnalyticsJobParams): Promise<any> {
+async function executeAggregationJob(db: Database, params: AnalyticsJobParams): Promise<any> {
   console.log(`🔄 Executing aggregation job for database: ${params.database}`);
   
   // Simulate data aggregation - SQLite compatible
@@ -206,7 +206,7 @@ async function executeAggregationJob(db: Database.Database, params: AnalyticsJob
     ORDER BY date DESC
   `;
   
-  const result = db.prepare(aggregationQuery).all();
+  const result = db.query(aggregationQuery).all();
   
   const aggregationData = {
     queryType: params.queryType,

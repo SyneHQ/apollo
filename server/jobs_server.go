@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	cfg "github.com/SyneHQ/apollo"
@@ -89,6 +90,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, id string, result string, runErr error, start, end int64) {
 	if s.store == nil {
+		log.Println("No store found")
 		return
 	}
 	rec := scheduler.ExecutionRecord{
@@ -109,7 +111,10 @@ func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, i
 		StartedAt:  start,
 		FinishedAt: end,
 	}
-	_ = s.store.AddExecution(ctx, rec)
+	err := s.store.AddExecution(ctx, rec)
+	if err != nil {
+		log.Println("Error adding execution to store", err)
+	}
 }
 
 func (s *JobsServer) DeleteJob(ctx context.Context, req *proto.DeleteJobRequest) (*proto.DeleteJobResponse, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL
 	_ "modernc.org/sqlite"
@@ -40,6 +41,15 @@ func OpenStore(driver, path string) (*Store, error) {
 	db, err := sql.Open(driver, path)
 	if err != nil {
 		return nil, err
+	}
+	if driver == "sqlite" {
+		db.Exec(`PRAGMA foreign_keys = ON`)
+	}
+	if driver == "postgres" {
+		db.SetConnMaxIdleTime(15 * time.Minute)
+		db.SetMaxIdleConns(10)
+		db.SetMaxOpenConns(100)
+		db.SetConnMaxLifetime(1 * time.Hour)
 	}
 	if err := migrate(db); err != nil {
 		return nil, err

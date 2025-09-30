@@ -135,6 +135,11 @@ else
     echo "Skipping GHCR login. Make sure you are already logged in if you want to pull private images."
 fi
 
+# ask path of jobs config
+read -p "Enter the path to the jobs config file: (Optional)" JOBS_CONFIG_PATH
+JOBS_CONFIG_PATH="${JOBS_CONFIG_PATH}"
+echo "Jobs config path: $JOBS_CONFIG_PATH"
+
 # 7. Deploy or update the Docker Swarm service
 # Expose port 6910:6910 using Docker Swarm's --publish mode
 
@@ -153,6 +158,10 @@ echo "Creating new service with correct port publishing..."
 DOCKER_MOUNT_FLAG=()
 if [ "$ENABLE_DOCKER_SOCK_MOUNT" = "1" ] || [ "$ENABLE_DOCKER_SOCK_MOUNT" = "true" ]; then
     DOCKER_MOUNT_FLAG+=(--mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock)
+fi
+
+if [ -f "$JOBS_CONFIG_PATH" ]; then
+    DOCKER_MOUNT_FLAG+=(--mount type=bind,src=$JOBS_CONFIG_PATH,dst=/app/jobs.yml)
 fi
 
 if [ ${#ENV_CREATE_FLAGS[@]} -gt 0 ]; then

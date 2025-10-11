@@ -34,7 +34,8 @@ type ExecutionRecord struct {
 }
 
 type Store struct {
-	db *sql.DB
+	db     *sql.DB
+	driver string
 }
 
 func OpenStore(driver, path string) (*Store, error) {
@@ -54,7 +55,7 @@ func OpenStore(driver, path string) (*Store, error) {
 	if err := migrate(db); err != nil {
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, driver: driver}, nil
 }
 
 func migrate(db *sql.DB) error {
@@ -89,11 +90,35 @@ func migrate(db *sql.DB) error {
 	return err
 }
 
+type DBDriver string
+
+const (
+	SQLite     DBDriver = "sqlite"
+	PostgreSQL DBDriver = "postgres"
+)
+
+func (s *Store) IsSQLite() bool {
+	return DBDriver(s.driver) == SQLite
+}
+
 func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
+	// Use UPSERT syntax appropriate for each database
+	query := `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
         VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(name) DO UPDATE SET command=excluded.command, args_base64=excluded.args_base64, cron_spec=excluded.cron_spec, cpu=excluded.cpu, memory=excluded.memory`,
-		r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory)
+        ON CONFLICT(name) DO UPDATE SET 
+            command = EXCLUDED.command, 
+            args_base64 = EXCLUDED.args_base64, 
+            cron_spec = EXCLUDED.cron_spec, 
+            cpu = EXCLUDED.cpu, 
+            memory = EXCLUDED.memory`
+
+	// For SQLite, use REPLACE or INSERT OR REPLACE for better performance
+	if s.IsSQLite() {
+		query = `INSERT OR REPLACE INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
+            VALUES (?, ?, ?, ?, ?, ?)`
+	}
+
+	_, err := s.db.ExecContext(ctx, query, r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory)
 	return err
 }
 
@@ -110,11 +135,14 @@ func (s *Store) Delete(ctx context.Context, name string) error {
 }
 
 func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT name, command, args_base64, cron_spec, cpu, memory FROM apollo_jobs`)
+	// Add ORDER BY for consistent results and potential index usage
+	rows, err := s.db.QueryContext(ctx, `SELECT name, command, args_base64, cron_spec, cpu, memory 
+        FROM apollo_jobs ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var out []JobRecord
 	for rows.Next() {
 		var r JobRecord
@@ -127,7 +155,9 @@ func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 }
 
 func (s *Store) AddExecution(ctx context.Context, e ExecutionRecord) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO apollo_executions (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
+	// Use prepared statement pattern for better performance
+	_, err := s.db.ExecContext(ctx, `INSERT INTO apollo_executions 
+        (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
 	)

@@ -101,6 +101,10 @@ func (s *Store) IsSQLite() bool {
 	return DBDriver(s.driver) == SQLite
 }
 
+func (s *Store) IsPostgres() bool {
+	return DBDriver(s.driver) == PostgreSQL
+}
+
 func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 	// Use UPSERT syntax appropriate for each database
 	query := `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
@@ -117,13 +121,27 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 		query = `INSERT OR REPLACE INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
             VALUES (?, ?, ?, ?, ?, ?)`
 	}
+	if s.IsPostgres() {
+		query = `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT(name) DO UPDATE SET 
+                command = EXCLUDED.command, 
+                args_base64 = EXCLUDED.args_base64, 
+                cron_spec = EXCLUDED.cron_spec, 
+                cpu = EXCLUDED.cpu, 
+                memory = EXCLUDED.memory`
+	}
 
 	_, err := s.db.ExecContext(ctx, query, r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory)
 	return err
 }
 
 func (s *Store) Delete(ctx context.Context, name string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM apollo_jobs WHERE name = ?`, name)
+	query := `DELETE FROM apollo_jobs WHERE name = ?`
+	if s.IsPostgres() {
+		query = `DELETE FROM apollo_jobs WHERE name = $1`
+	}
+	res, err := s.db.ExecContext(ctx, query, name)
 	if err != nil {
 		return err
 	}
@@ -156,9 +174,15 @@ func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 
 func (s *Store) AddExecution(ctx context.Context, e ExecutionRecord) error {
 	// Use prepared statement pattern for better performance
-	_, err := s.db.ExecContext(ctx, `INSERT INTO apollo_executions 
+	query := `INSERT INTO apollo_executions 
         (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	if s.IsPostgres() {
+		query = `INSERT INTO apollo_executions 
+        (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	}
+	_, err := s.db.ExecContext(ctx, query,
 		e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
 	)
 	return err

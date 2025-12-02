@@ -22,6 +22,8 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	// Example: docker run --rm <image> rover <command> <argsBase64>
 	args := []string{"run", "--rm"}
 
+	args = append(args, "--name", req.Name)
+
 	args, err := l.AppendSecrets(ctx, req, args)
 	if err != nil {
 		fmt.Printf("Error appending secrets: %v\n", err)
@@ -93,6 +95,12 @@ func (l *LocalRunner) AppendOverrides(ctx context.Context, req JobRequest, args 
 
 func (l *LocalRunner) DeleteJob(ctx context.Context, name string) error {
 	// local one-off containers are ephemeral; nothing to delete
+	// cancel the container if it's running
+	cmd := exec.CommandContext(ctx, "docker", "rm", "-f", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete container: %w: %s", err, string(out))
+	}
 	return nil
 }
 

@@ -82,20 +82,39 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 	log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, s.cfg.Jobs.Cmd, r.Command)
 
+	s.recordExecution(ctx, r, r.JobID, "", nil, start, 0)
+
 	result, err := s.runner.RunJob(ctx, s.cfg.Jobs.Cmd, r)
+
 	end := time.Now().Unix()
+
 	s.recordExecution(ctx, r, r.JobID, result, err, start, end)
+
 	if err != nil {
 		return nil, err
 	}
 	return &proto.RunJobResponse{Id: r.JobID, Logs: result}, nil
 }
 
-func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, id string, result string, runErr error, start, end int64) {
+func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, id string, result string, runErr error, start, optionalEnd int64) {
+	end := time.Now().Unix()
+	isRunning := optionalEnd == 0
+	if optionalEnd != 0 {
+		end = optionalEnd
+	}
 	if s.store == nil {
 		log.Println("No store found")
 		return
 	}
+
+	// Determine status: "running" if job hasn't finished, otherwise "error" or "success"
+	var status string
+	if isRunning {
+		status = "running"
+	} else {
+		status = map[bool]string{true: "error", false: "success"}[runErr != nil]
+	}
+
 	rec := scheduler.ExecutionRecord{
 		ID:         id,
 		Name:       r.Name,
@@ -103,7 +122,7 @@ func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, i
 		ArgsBase64: r.ArgsJSONBase64,
 		Cpu:        r.Resources.CPU,
 		Memory:     r.Resources.Memory,
-		Status:     map[bool]string{true: "error", false: "success"}[runErr != nil],
+		Status:     status,
 		Error: func() string {
 			if runErr != nil {
 				return runErr.Error()

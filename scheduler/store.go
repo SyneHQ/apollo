@@ -71,7 +71,7 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS apollo_executions (
-        id TEXT,
+        id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         command TEXT NOT NULL,
         args_base64 TEXT,
@@ -173,17 +173,37 @@ func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 }
 
 func (s *Store) AddExecution(ctx context.Context, e ExecutionRecord) error {
-	// Use prepared statement pattern for better performance
-	query := `INSERT INTO apollo_executions 
+	// Use UPSERT to support updating execution records (e.g., when status changes from "running" to "success"/"error")
+	var query string
+	if s.IsSQLite() {
+		query = `INSERT OR REPLACE INTO apollo_executions 
         (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	if s.IsPostgres() {
+	} else if s.IsPostgres() {
 		query = `INSERT INTO apollo_executions 
         (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (id) DO UPDATE SET 
+            status = EXCLUDED.status,
+            error = EXCLUDED.error,
+            result = EXCLUDED.result,
+            finished_at = EXCLUDED.finished_at`
+	} else {
+		// Fallback for other databases
+		query = `INSERT INTO apollo_executions 
+        (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
-	_, err := s.db.ExecContext(ctx, query,
-		e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
-	)
+
+	var err error
+	if s.IsPostgres() {
+		_, err = s.db.ExecContext(ctx, query,
+			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
+		)
+	} else {
+		_, err = s.db.ExecContext(ctx, query,
+			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
+		)
+	}
 	return err
 }

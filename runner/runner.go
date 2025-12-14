@@ -11,6 +11,7 @@ const (
 
 type JobRequest struct {
 	Name           string
+	Image          string
 	JobID          string // Optional: if not provided, will be auto-generated
 	Command        string
 	ArgsJSONBase64 string

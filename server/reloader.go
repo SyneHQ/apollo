@@ -23,6 +23,7 @@ func (s *JobsServer) Reload(ctx context.Context) {
 			Name:           r.Name,
 			Command:        r.Command,
 			ArgsJSONBase64: r.ArgsBase64,
+			Image:          r.Image,
 			Resources:      runner.Resources{CPU: r.Cpu, Memory: r.Memory},
 			Type:           runner.JobTypeRepeatable,
 			ScheduleSpec:   r.CronSpec,

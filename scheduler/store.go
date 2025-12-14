@@ -17,6 +17,7 @@ type JobRecord struct {
 	CronSpec   string
 	Cpu        string
 	Memory     string
+	Image      string
 }
 
 type ExecutionRecord struct {
@@ -26,6 +27,7 @@ type ExecutionRecord struct {
 	ArgsBase64 string
 	Cpu        string
 	Memory     string
+	Image      string
 	Status     string
 	Error      string
 	Result     string
@@ -59,17 +61,33 @@ func OpenStore(driver, path string) (*Store, error) {
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS apollo_jobs (
+
+	// if table exits add image column to apollo_jobs
+	_, err := db.Exec(`ALTER TABLE apollo_jobs ADD COLUMN IF NOT EXISTS image TEXT`)
+	if err != nil {
+		return err
+	}
+
+	// if table exits add image column
+	_, err = db.Exec(`ALTER TABLE apollo_executions ADD COLUMN IF NOT EXISTS image TEXT`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS apollo_jobs (
         name TEXT PRIMARY KEY,
         command TEXT NOT NULL,
         args_base64 TEXT,
         cron_spec TEXT NOT NULL,
         cpu TEXT,
-        memory TEXT
+        memory TEXT,
+        image TEXT
     )`)
+
 	if err != nil {
 		return err
 	}
+
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS apollo_executions (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -77,6 +95,7 @@ func migrate(db *sql.DB) error {
         args_base64 TEXT,
         cpu TEXT,
         memory TEXT,
+        image TEXT,
         status TEXT,
         error TEXT,
         result TEXT,
@@ -107,32 +126,34 @@ func (s *Store) IsPostgres() bool {
 
 func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 	// Use UPSERT syntax appropriate for each database
-	query := `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
-        VALUES (?, ?, ?, ?, ?, ?)
+	query := `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET 
             command = EXCLUDED.command, 
             args_base64 = EXCLUDED.args_base64, 
             cron_spec = EXCLUDED.cron_spec, 
             cpu = EXCLUDED.cpu, 
-            memory = EXCLUDED.memory`
+            memory = EXCLUDED.memory,
+            image = EXCLUDED.image`
 
 	// For SQLite, use REPLACE or INSERT OR REPLACE for better performance
 	if s.IsSQLite() {
-		query = `INSERT OR REPLACE INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
-            VALUES (?, ?, ?, ?, ?, ?)`
+		query = `INSERT OR REPLACE INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	}
 	if s.IsPostgres() {
-		query = `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory)
-            VALUES ($1, $2, $3, $4, $5, $6)
+		query = `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT(name) DO UPDATE SET 
                 command = EXCLUDED.command, 
                 args_base64 = EXCLUDED.args_base64, 
                 cron_spec = EXCLUDED.cron_spec, 
                 cpu = EXCLUDED.cpu, 
-                memory = EXCLUDED.memory`
+                memory = EXCLUDED.memory,
+                image = EXCLUDED.image`
 	}
 
-	_, err := s.db.ExecContext(ctx, query, r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory)
+	_, err := s.db.ExecContext(ctx, query, r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image)
 	return err
 }
 
@@ -154,8 +175,8 @@ func (s *Store) Delete(ctx context.Context, name string) error {
 
 func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 	// Add ORDER BY for consistent results and potential index usage
-	rows, err := s.db.QueryContext(ctx, `SELECT name, command, args_base64, cron_spec, cpu, memory 
-        FROM apollo_jobs ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, command, args_base64, cron_spec, cpu, memory, image 
+        FROM apollo_jobs ORDER BY name, image`)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +185,7 @@ func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 	var out []JobRecord
 	for rows.Next() {
 		var r JobRecord
-		if err := rows.Scan(&r.Name, &r.Command, &r.ArgsBase64, &r.CronSpec, &r.Cpu, &r.Memory); err != nil {
+		if err := rows.Scan(&r.Name, &r.Command, &r.ArgsBase64, &r.CronSpec, &r.Cpu, &r.Memory, &r.Image); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -177,32 +198,33 @@ func (s *Store) AddExecution(ctx context.Context, e ExecutionRecord) error {
 	var query string
 	if s.IsSQLite() {
 		query = `INSERT OR REPLACE INTO apollo_executions 
-        (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, name, command, args_base64, cpu, memory, image, status, error, result, started_at, finished_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	} else if s.IsPostgres() {
 		query = `INSERT INTO apollo_executions 
-        (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (id, name, command, args_base64, cpu, memory, image, status, error, result, started_at, finished_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (id) DO UPDATE SET 
             status = EXCLUDED.status,
+			image = EXCLUDED.image,
             error = EXCLUDED.error,
             result = EXCLUDED.result,
             finished_at = EXCLUDED.finished_at`
 	} else {
 		// Fallback for other databases
 		query = `INSERT INTO apollo_executions 
-        (id, name, command, args_base64, cpu, memory, status, error, result, started_at, finished_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, name, command, args_base64, cpu, memory, image, status, error, result, started_at, finished_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
 
 	var err error
 	if s.IsPostgres() {
 		_, err = s.db.ExecContext(ctx, query,
-			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
+			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Image, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
 		)
 	} else {
 		_, err = s.db.ExecContext(ctx, query,
-			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
+			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Image, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
 		)
 	}
 	return err

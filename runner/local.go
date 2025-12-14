@@ -36,7 +36,12 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 		return "", err
 	}
 
-	args = append(args, l.Image, _cmd, req.Command)
+	image := l.Image
+	if req.Image != "" {
+		image = req.Image
+	}
+
+	args = append(args, image, _cmd, req.Command)
 
 	if req.ArgsJSONBase64 != "" {
 		args = append(args, req.ArgsJSONBase64)

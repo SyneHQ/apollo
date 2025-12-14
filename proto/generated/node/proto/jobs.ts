@@ -104,6 +104,7 @@ export namespace jobs {
         #one_of_decls: number[][] = [];
         constructor(data?: any[] | {
             name?: string;
+            image?: string;
             job_id?: string;
             command?: string;
             args_base64?: string;
@@ -117,6 +118,9 @@ export namespace jobs {
             if (!Array.isArray(data) && typeof data == "object") {
                 if ("name" in data && data.name != undefined) {
                     this.name = data.name;
+                }
+                if ("image" in data && data.image != undefined) {
+                    this.image = data.image;
                 }
                 if ("job_id" in data && data.job_id != undefined) {
                     this.job_id = data.job_id;
@@ -147,56 +151,63 @@ export namespace jobs {
         set name(value: string) {
             pb_1.Message.setField(this, 1, value);
         }
-        get job_id() {
+        get image() {
             return pb_1.Message.getFieldWithDefault(this, 2, "") as string;
         }
-        set job_id(value: string) {
+        set image(value: string) {
             pb_1.Message.setField(this, 2, value);
         }
-        get command() {
+        get job_id() {
             return pb_1.Message.getFieldWithDefault(this, 3, "") as string;
         }
-        set command(value: string) {
+        set job_id(value: string) {
             pb_1.Message.setField(this, 3, value);
         }
-        get args_base64() {
+        get command() {
             return pb_1.Message.getFieldWithDefault(this, 4, "") as string;
         }
-        set args_base64(value: string) {
+        set command(value: string) {
             pb_1.Message.setField(this, 4, value);
         }
+        get args_base64() {
+            return pb_1.Message.getFieldWithDefault(this, 5, "") as string;
+        }
+        set args_base64(value: string) {
+            pb_1.Message.setField(this, 5, value);
+        }
         get resources() {
-            return pb_1.Message.getWrapperField(this, Resources, 5) as Resources;
+            return pb_1.Message.getWrapperField(this, Resources, 6) as Resources;
         }
         set resources(value: Resources) {
-            pb_1.Message.setWrapperField(this, 5, value);
+            pb_1.Message.setWrapperField(this, 6, value);
         }
         get has_resources() {
-            return pb_1.Message.getField(this, 5) != null;
+            return pb_1.Message.getField(this, 6) != null;
         }
         get type() {
-            return pb_1.Message.getFieldWithDefault(this, 6, JobType.JOB_TYPE_ONE_TIME) as JobType;
+            return pb_1.Message.getFieldWithDefault(this, 7, JobType.JOB_TYPE_ONE_TIME) as JobType;
         }
         set type(value: JobType) {
-            pb_1.Message.setField(this, 6, value);
-        }
-        get schedule() {
-            return pb_1.Message.getFieldWithDefault(this, 7, "") as string;
-        }
-        set schedule(value: string) {
             pb_1.Message.setField(this, 7, value);
         }
+        get schedule() {
+            return pb_1.Message.getFieldWithDefault(this, 8, "") as string;
+        }
+        set schedule(value: string) {
+            pb_1.Message.setField(this, 8, value);
+        }
         get overrides() {
-            return pb_1.Message.getWrapperField(this, JobOverrides, 8) as JobOverrides;
+            return pb_1.Message.getWrapperField(this, JobOverrides, 9) as JobOverrides;
         }
         set overrides(value: JobOverrides) {
-            pb_1.Message.setWrapperField(this, 8, value);
+            pb_1.Message.setWrapperField(this, 9, value);
         }
         get has_overrides() {
-            return pb_1.Message.getField(this, 8) != null;
+            return pb_1.Message.getField(this, 9) != null;
         }
         static fromObject(data: {
             name?: string;
+            image?: string;
             job_id?: string;
             command?: string;
             args_base64?: string;
@@ -208,6 +219,9 @@ export namespace jobs {
             const message = new RunJobRequest({});
             if (data.name != null) {
                 message.name = data.name;
+            }
+            if (data.image != null) {
+                message.image = data.image;
             }
             if (data.job_id != null) {
                 message.job_id = data.job_id;
@@ -235,6 +249,7 @@ export namespace jobs {
         toObject() {
             const data: {
                 name?: string;
+                image?: string;
                 job_id?: string;
                 command?: string;
                 args_base64?: string;
@@ -245,6 +260,9 @@ export namespace jobs {
             } = {};
             if (this.name != null) {
                 data.name = this.name;
+            }
+            if (this.image != null) {
+                data.image = this.image;
             }
             if (this.job_id != null) {
                 data.job_id = this.job_id;
@@ -275,20 +293,22 @@ export namespace jobs {
             const writer = w || new pb_1.BinaryWriter();
             if (this.name.length)
                 writer.writeString(1, this.name);
+            if (this.image.length)
+                writer.writeString(2, this.image);
             if (this.job_id.length)
-                writer.writeString(2, this.job_id);
+                writer.writeString(3, this.job_id);
             if (this.command.length)
-                writer.writeString(3, this.command);
+                writer.writeString(4, this.command);
             if (this.args_base64.length)
-                writer.writeString(4, this.args_base64);
+                writer.writeString(5, this.args_base64);
             if (this.has_resources)
-                writer.writeMessage(5, this.resources, () => this.resources.serialize(writer));
+                writer.writeMessage(6, this.resources, () => this.resources.serialize(writer));
             if (this.type != JobType.JOB_TYPE_ONE_TIME)
-                writer.writeEnum(6, this.type);
+                writer.writeEnum(7, this.type);
             if (this.schedule.length)
-                writer.writeString(7, this.schedule);
+                writer.writeString(8, this.schedule);
             if (this.has_overrides)
-                writer.writeMessage(8, this.overrides, () => this.overrides.serialize(writer));
+                writer.writeMessage(9, this.overrides, () => this.overrides.serialize(writer));
             if (!w)
                 return writer.getResultBuffer();
         }
@@ -302,24 +322,27 @@ export namespace jobs {
                         message.name = reader.readString();
                         break;
                     case 2:
-                        message.job_id = reader.readString();
+                        message.image = reader.readString();
                         break;
                     case 3:
-                        message.command = reader.readString();
+                        message.job_id = reader.readString();
                         break;
                     case 4:
-                        message.args_base64 = reader.readString();
+                        message.command = reader.readString();
                         break;
                     case 5:
-                        reader.readMessage(message.resources, () => message.resources = Resources.deserialize(reader));
+                        message.args_base64 = reader.readString();
                         break;
                     case 6:
-                        message.type = reader.readEnum();
+                        reader.readMessage(message.resources, () => message.resources = Resources.deserialize(reader));
                         break;
                     case 7:
-                        message.schedule = reader.readString();
+                        message.type = reader.readEnum();
                         break;
                     case 8:
+                        message.schedule = reader.readString();
+                        break;
+                    case 9:
                         reader.readMessage(message.overrides, () => message.overrides = JobOverrides.deserialize(reader));
                         break;
                     default: reader.skipField();

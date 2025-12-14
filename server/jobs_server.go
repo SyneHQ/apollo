@@ -38,6 +38,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 	r := runner.JobRequest{
 		Name:           req.GetName(),
 		Command:        req.GetCommand(),
+		Image:          req.GetImage(),
 		ArgsJSONBase64: req.GetArgsBase64(),
 		Resources:      runner.Resources{CPU: req.GetResources().Cpu, Memory: req.GetResources().Memory},
 		Type:           mapJobType(req.GetType()),
@@ -121,6 +122,7 @@ func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, i
 		Command:    r.Command,
 		ArgsBase64: r.ArgsJSONBase64,
 		Cpu:        r.Resources.CPU,
+		Image:      r.Image,
 		Memory:     r.Resources.Memory,
 		Status:     status,
 		Error: func() string {

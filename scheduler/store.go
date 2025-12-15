@@ -13,6 +13,7 @@ import (
 type JobRecord struct {
 	Name       string
 	Command    string
+	Prefix     string
 	ArgsBase64 string
 	CronSpec   string
 	Cpu        string
@@ -25,6 +26,7 @@ type ExecutionRecord struct {
 	Name       string
 	Command    string
 	ArgsBase64 string
+	Prefix     string
 	Cpu        string
 	Memory     string
 	Image      string
@@ -51,7 +53,7 @@ func OpenStore(driver, path string) (*Store, error) {
 	if driver == "postgres" {
 		db.SetConnMaxIdleTime(15 * time.Minute)
 		db.SetMaxIdleConns(10)
-		db.SetMaxOpenConns(100)
+		db.SetMaxOpenConns(99)
 		db.SetConnMaxLifetime(1 * time.Hour)
 	}
 	if err := migrate(db); err != nil {
@@ -62,8 +64,20 @@ func OpenStore(driver, path string) (*Store, error) {
 
 func migrate(db *sql.DB) error {
 
+	// if table exits add prefix column to apollo_jobs
+	_, err := db.Exec(`ALTER TABLE apollo_jobs ADD COLUMN IF NOT EXISTS prefix TEXT`)
+	if err != nil {
+		return err
+	}
+
+	// if table exits add prefix column to apollo_executions
+	_, err = db.Exec(`ALTER TABLE apollo_executions ADD COLUMN IF NOT EXISTS prefix TEXT`)
+	if err != nil {
+		return err
+	}
+
 	// if table exits add image column to apollo_jobs
-	_, err := db.Exec(`ALTER TABLE apollo_jobs ADD COLUMN IF NOT EXISTS image TEXT`)
+	_, err = db.Exec(`ALTER TABLE apollo_jobs ADD COLUMN IF NOT EXISTS image TEXT`)
 	if err != nil {
 		return err
 	}
@@ -81,7 +95,8 @@ func migrate(db *sql.DB) error {
         cron_spec TEXT NOT NULL,
         cpu TEXT,
         memory TEXT,
-        image TEXT
+        image TEXT,
+        prefix TEXT
     )`)
 
 	if err != nil {
@@ -96,6 +111,7 @@ func migrate(db *sql.DB) error {
         cpu TEXT,
         memory TEXT,
         image TEXT,
+        prefix TEXT,
         status TEXT,
         error TEXT,
         result TEXT,
@@ -126,31 +142,33 @@ func (s *Store) IsPostgres() bool {
 
 func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 	// Use UPSERT syntax appropriate for each database
-	query := `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+	query := `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image, prefix)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET 
             command = EXCLUDED.command, 
             args_base64 = EXCLUDED.args_base64, 
             cron_spec = EXCLUDED.cron_spec, 
             cpu = EXCLUDED.cpu, 
             memory = EXCLUDED.memory,
-            image = EXCLUDED.image`
+            image = EXCLUDED.image,
+            prefix = EXCLUDED.prefix`
 
 	// For SQLite, use REPLACE or INSERT OR REPLACE for better performance
 	if s.IsSQLite() {
-		query = `INSERT OR REPLACE INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		query = `INSERT OR REPLACE INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image, prefix)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
 	if s.IsPostgres() {
-		query = `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+		query = `INSERT INTO apollo_jobs (name, command, args_base64, cron_spec, cpu, memory, image, prefix)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT(name) DO UPDATE SET 
                 command = EXCLUDED.command, 
                 args_base64 = EXCLUDED.args_base64, 
                 cron_spec = EXCLUDED.cron_spec, 
                 cpu = EXCLUDED.cpu, 
                 memory = EXCLUDED.memory,
-                image = EXCLUDED.image`
+                image = EXCLUDED.image,
+                prefix = EXCLUDED.prefix`
 	}
 
 	_, err := s.db.ExecContext(ctx, query, r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image)
@@ -175,8 +193,8 @@ func (s *Store) Delete(ctx context.Context, name string) error {
 
 func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 	// Add ORDER BY for consistent results and potential index usage
-	rows, err := s.db.QueryContext(ctx, `SELECT name, command, args_base64, cron_spec, cpu, memory, image 
-        FROM apollo_jobs ORDER BY name, image`)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, command, args_base64, cron_spec, cpu, memory, image, prefix 
+        FROM apollo_jobs ORDER BY name, image, prefix`)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +203,7 @@ func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 	var out []JobRecord
 	for rows.Next() {
 		var r JobRecord
-		if err := rows.Scan(&r.Name, &r.Command, &r.ArgsBase64, &r.CronSpec, &r.Cpu, &r.Memory, &r.Image); err != nil {
+		if err := rows.Scan(&r.Name, &r.Command, &r.ArgsBase64, &r.CronSpec, &r.Cpu, &r.Memory, &r.Image, &r.Prefix); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -198,33 +216,34 @@ func (s *Store) AddExecution(ctx context.Context, e ExecutionRecord) error {
 	var query string
 	if s.IsSQLite() {
 		query = `INSERT OR REPLACE INTO apollo_executions 
-        (id, name, command, args_base64, cpu, memory, image, status, error, result, started_at, finished_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, name, command, args_base64, cpu, memory, image, prefix, status, error, result, started_at, finished_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	} else if s.IsPostgres() {
 		query = `INSERT INTO apollo_executions 
-        (id, name, command, args_base64, cpu, memory, image, status, error, result, started_at, finished_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        (id, name, command, args_base64, cpu, memory, image, prefix, status, error, result, started_at, finished_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (id) DO UPDATE SET 
             status = EXCLUDED.status,
 			image = EXCLUDED.image,
+			prefix = EXCLUDED.prefix,
             error = EXCLUDED.error,
             result = EXCLUDED.result,
             finished_at = EXCLUDED.finished_at`
 	} else {
 		// Fallback for other databases
 		query = `INSERT INTO apollo_executions 
-        (id, name, command, args_base64, cpu, memory, image, status, error, result, started_at, finished_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, name, command, args_base64, cpu, memory, image, prefix, status, error, result, started_at, finished_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
 
 	var err error
 	if s.IsPostgres() {
 		_, err = s.db.ExecContext(ctx, query,
-			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Image, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
+			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Image, e.Prefix, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
 		)
 	} else {
 		_, err = s.db.ExecContext(ctx, query,
-			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Image, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
+			e.ID, e.Name, e.Command, e.ArgsBase64, e.Cpu, e.Memory, e.Image, e.Prefix, e.Status, e.Error, e.Result, e.StartedAt, e.FinishedAt,
 		)
 	}
 	return err

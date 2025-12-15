@@ -11,13 +11,14 @@ enum JobType { JOB_TYPE_ONE_TIME = 0; JOB_TYPE_REPEATABLE = 1; }
 message RunJobRequest {
   string name = 1;
   string image = 2;
-  string job_id = 3; // Optional: if not provided, will be auto-generated
-  string command = 4; // e.g., "ack", "migrateJob", etc.
-  string args_base64 = 5;
-  Resources resources = 6;
-  JobType type = 7;
-  string schedule = 8; // cron or duration string
-  JobOverrides overrides = 9; // Optional runtime overrides
+  string prefix = 3;
+  string job_id = 4; // Optional: if not provided, will be auto-generated
+  string command = 5; // e.g., "ack", "migrateJob", etc.
+  string args_base64 = 6;
+  Resources resources = 7;
+  JobType type = 8;
+  string schedule = 9; // cron or duration string
+  JobOverrides overrides = 10; // Optional runtime overrides
 }
 
 message JobOverrides {

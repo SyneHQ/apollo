@@ -16,7 +16,13 @@ secrets:
 
   - name: NODE_ENV
     value: $NODE_ENV
+  
+  - name: FLOWR_API_URL
+    value: $FLOWR_API_URL
 
+  - name: FLOWR_API_KEY
+    value: $FLOWR_API_KEY\
+    
 jobs:
   - name: handleBackupJob
     resources:

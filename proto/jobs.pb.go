@@ -7,11 +7,12 @@
 package proto
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -123,13 +124,14 @@ type RunJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Image         string                 `protobuf:"bytes,2,opt,name=image,proto3" json:"image,omitempty"`
-	JobId         string                 `protobuf:"bytes,3,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"` // Optional: if not provided, will be auto-generated
-	Command       string                 `protobuf:"bytes,4,opt,name=command,proto3" json:"command,omitempty"`          // e.g., "ack", "migrateJob", etc.
-	ArgsBase64    string                 `protobuf:"bytes,5,opt,name=args_base64,json=argsBase64,proto3" json:"args_base64,omitempty"`
-	Resources     *Resources             `protobuf:"bytes,6,opt,name=resources,proto3" json:"resources,omitempty"`
-	Type          JobType                `protobuf:"varint,7,opt,name=type,proto3,enum=jobs.JobType" json:"type,omitempty"`
-	Schedule      string                 `protobuf:"bytes,8,opt,name=schedule,proto3" json:"schedule,omitempty"`   // cron or duration string
-	Overrides     *JobOverrides          `protobuf:"bytes,9,opt,name=overrides,proto3" json:"overrides,omitempty"` // Optional runtime overrides
+	Prefix        string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	JobId         string                 `protobuf:"bytes,4,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"` // Optional: if not provided, will be auto-generated
+	Command       string                 `protobuf:"bytes,5,opt,name=command,proto3" json:"command,omitempty"`          // e.g., "ack", "migrateJob", etc.
+	ArgsBase64    string                 `protobuf:"bytes,6,opt,name=args_base64,json=argsBase64,proto3" json:"args_base64,omitempty"`
+	Resources     *Resources             `protobuf:"bytes,7,opt,name=resources,proto3" json:"resources,omitempty"`
+	Type          JobType                `protobuf:"varint,8,opt,name=type,proto3,enum=jobs.JobType" json:"type,omitempty"`
+	Schedule      string                 `protobuf:"bytes,9,opt,name=schedule,proto3" json:"schedule,omitempty"`    // cron or duration string
+	Overrides     *JobOverrides          `protobuf:"bytes,10,opt,name=overrides,proto3" json:"overrides,omitempty"` // Optional runtime overrides
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -174,6 +176,13 @@ func (x *RunJobRequest) GetName() string {
 func (x *RunJobRequest) GetImage() string {
 	if x != nil {
 		return x.Image
+	}
+	return ""
+}
+
+func (x *RunJobRequest) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
 	}
 	return ""
 }
@@ -607,6 +616,8 @@ type ScheduleItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	Prefix        string                 `protobuf:"bytes,3,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	Image         string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
 	ArgsBase64    string                 `protobuf:"bytes,3,opt,name=args_base64,json=argsBase64,proto3" json:"args_base64,omitempty"`
 	Cron          string                 `protobuf:"bytes,4,opt,name=cron,proto3" json:"cron,omitempty"`
 	Resources     *Resources             `protobuf:"bytes,5,opt,name=resources,proto3" json:"resources,omitempty"`
@@ -731,18 +742,20 @@ const file_jobs_proto_rawDesc = "" +
 	"jobs.proto\x12\x04jobs\"5\n" +
 	"\tResources\x12\x10\n" +
 	"\x03cpu\x18\x01 \x01(\tR\x03cpu\x12\x16\n" +
-	"\x06memory\x18\x02 \x01(\tR\x06memory\"\xab\x02\n" +
+	"\x06memory\x18\x02 \x01(\tR\x06memory\"\xc3\x02\n" +
 	"\rRunJobRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05image\x18\x02 \x01(\tR\x05image\x12\x15\n" +
-	"\x06job_id\x18\x03 \x01(\tR\x05jobId\x12\x18\n" +
-	"\acommand\x18\x04 \x01(\tR\acommand\x12\x1f\n" +
-	"\vargs_base64\x18\x05 \x01(\tR\n" +
+	"\x05image\x18\x02 \x01(\tR\x05image\x12\x16\n" +
+	"\x06prefix\x18\x03 \x01(\tR\x06prefix\x12\x15\n" +
+	"\x06job_id\x18\x04 \x01(\tR\x05jobId\x12\x18\n" +
+	"\acommand\x18\x05 \x01(\tR\acommand\x12\x1f\n" +
+	"\vargs_base64\x18\x06 \x01(\tR\n" +
 	"argsBase64\x12-\n" +
-	"\tresources\x18\x06 \x01(\v2\x0f.jobs.ResourcesR\tresources\x12!\n" +
-	"\x04type\x18\a \x01(\x0e2\r.jobs.JobTypeR\x04type\x12\x1a\n" +
-	"\bschedule\x18\b \x01(\tR\bschedule\x120\n" +
-	"\toverrides\x18\t \x01(\v2\x12.jobs.JobOverridesR\toverrides\"\x90\x01\n" +
+	"\tresources\x18\a \x01(\v2\x0f.jobs.ResourcesR\tresources\x12!\n" +
+	"\x04type\x18\b \x01(\x0e2\r.jobs.JobTypeR\x04type\x12\x1a\n" +
+	"\bschedule\x18\t \x01(\tR\bschedule\x120\n" +
+	"\toverrides\x18\n" +
+	" \x01(\v2\x12.jobs.JobOverridesR\toverrides\"\x90\x01\n" +
 	"\fJobOverrides\x12\x12\n" +
 	"\x04args\x18\x01 \x03(\tR\x04args\x12\x1e\n" +
 	"\x03env\x18\x02 \x03(\v2\f.jobs.EnvVarR\x03env\x12-\n" +

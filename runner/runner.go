@@ -15,6 +15,7 @@ type JobRequest struct {
 	JobID          string // Optional: if not provided, will be auto-generated
 	Command        string
 	ArgsJSONBase64 string
+	Prefix         string
 	Resources      Resources
 	Type           JobType
 	ScheduleSpec   string        // cron spec if repeatable

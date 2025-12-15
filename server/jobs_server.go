@@ -39,6 +39,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		Name:           req.GetName(),
 		Command:        req.GetCommand(),
 		Image:          req.GetImage(),
+		Prefix:         req.GetPrefix(),
 		ArgsJSONBase64: req.GetArgsBase64(),
 		Resources:      runner.Resources{CPU: req.GetResources().Cpu, Memory: req.GetResources().Memory},
 		Type:           mapJobType(req.GetType()),
@@ -50,6 +51,11 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		r.Resources.CPU = res.CPU
 		r.Resources.Memory = res.Memory
 	}
+
+	if r.Prefix == "" {
+		r.Prefix = s.cfg.Jobs.Cmd
+	}
+
 	if r.Type == runner.JobTypeRepeatable && s.sched != nil && r.ScheduleSpec != "" {
 		name := r.Name
 		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) {
@@ -57,8 +63,9 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			if r.JobID == "" {
 				r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
 			}
-			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, s.cfg.Jobs.Cmd, r.Command)
-			result, runErr := s.runner.RunJob(c, s.cfg.Jobs.Cmd, r)
+
+			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
+			result, runErr := s.runner.RunJob(c, r.Prefix, r)
 			end := time.Now().Unix()
 			s.recordExecution(c, r, r.JobID, result, runErr, start, end)
 		})
@@ -81,11 +88,11 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
 	}
 
-	log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, s.cfg.Jobs.Cmd, r.Command)
+	log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
 
 	s.recordExecution(ctx, r, r.JobID, "", nil, start, 0)
 
-	result, err := s.runner.RunJob(ctx, s.cfg.Jobs.Cmd, r)
+	result, err := s.runner.RunJob(ctx, r.Prefix, r)
 
 	end := time.Now().Unix()
 
@@ -124,6 +131,7 @@ func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, i
 		Cpu:        r.Resources.CPU,
 		Image:      r.Image,
 		Memory:     r.Resources.Memory,
+		Prefix:     r.Prefix,
 		Status:     status,
 		Error: func() string {
 			if runErr != nil {
@@ -188,6 +196,8 @@ func (s *JobsServer) ListSchedules(ctx context.Context, req *proto.ListSchedules
 			ArgsBase64: r.ArgsBase64,
 			Cron:       r.CronSpec,
 			Resources:  &proto.Resources{Cpu: r.Cpu, Memory: r.Memory},
+			Prefix:     r.Prefix,
+			Image:      r.Image,
 		})
 	}
 	return &proto.ListSchedulesResponse{Items: out}, nil

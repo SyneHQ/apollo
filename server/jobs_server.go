@@ -26,9 +26,12 @@ func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
 	if c.JobsProvider == "local" && c.Store.Driver != "" && c.Store.Path != "" {
 		sch = scheduler.New()
 		// best-effort open local sqlite at ./jobs.db
+		log.Println("Opening store", c.Store.Driver, c.Store.Path)
 		s, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
 		if err == nil {
 			st = s
+		} else {
+			log.Println("Error opening store", err)
 		}
 	}
 	return &JobsServer{runner: r, cfg: c, sched: sch, store: st}

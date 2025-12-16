@@ -236,7 +236,6 @@ func (s *Store) createIndexes() error {
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_apollo_executions_name_started ON apollo_executions(name, started_at DESC)",
 		"CREATE INDEX IF NOT EXISTS idx_apollo_executions_status ON apollo_executions(status)",
-		"CREATE INDEX IF NOT EXISTS idx_apollo_jobs_updated ON apollo_jobs(updated_at DESC)",
 	}
 
 	for _, idx := range indexes {

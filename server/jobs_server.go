@@ -77,14 +77,21 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		}
 		if s.store != nil {
 			_ = s.store.Upsert(ctx, scheduler.JobRecord{
-				Name:    r.Name,
-				Command: r.Command,
-				Cpu:     r.Resources.CPU,
-				Memory:  r.Resources.Memory,
+				Name:       r.Name,
+				Image:      r.Image,
+				Command:    r.Command,
+				Cpu:        r.Resources.CPU,
+				Memory:     r.Resources.Memory,
+				Prefix:     r.Prefix,
+				CronSpec:   r.ScheduleSpec,
+				ArgsBase64: r.ArgsJSONBase64,
 			})
+
+			log.Printf("Upserted job %s with cmd: %s and command: %s", r.Name, r.Prefix, r.Command)
 		}
 		return &proto.RunJobResponse{Id: name, Logs: "scheduled"}, nil
 	}
+
 	start := time.Now().Unix()
 
 	if r.JobID == "" {

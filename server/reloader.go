@@ -19,6 +19,8 @@ func (s *JobsServer) Reload(ctx context.Context) {
 		return
 	}
 
+	log.Printf("restoring %d schedules", len(records))
+
 	for _, r := range records {
 		if r.Prefix == "" {
 			r.Prefix = s.cfg.Jobs.Cmd
@@ -40,7 +42,10 @@ func (s *JobsServer) Reload(ctx context.Context) {
 		if err != nil {
 			log.Printf("failed to restore schedule for %s: %v", r.Name, err)
 		}
+		log.Printf("restored schedule for %s", r.Name)
 		// small delay to avoid thundering herd on boot
 		time.Sleep(50 * time.Millisecond)
 	}
+
+	log.Printf("restored %d schedules", len(records))
 }

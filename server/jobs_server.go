@@ -76,7 +76,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			return nil, err
 		}
 		if s.store != nil {
-			_ = s.store.Upsert(ctx, scheduler.JobRecord{
+			err = s.store.Upsert(ctx, scheduler.JobRecord{
 				Name:       r.Name,
 				Image:      r.Image,
 				Command:    r.Command,
@@ -86,6 +86,11 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 				CronSpec:   r.ScheduleSpec,
 				ArgsBase64: r.ArgsJSONBase64,
 			})
+
+			if err != nil {
+				log.Println("Error upserting job", err)
+				return nil, err
+			}
 
 			log.Printf("Upserted job %s with cmd: %s and command: %s", r.Name, r.Prefix, r.Command)
 		}

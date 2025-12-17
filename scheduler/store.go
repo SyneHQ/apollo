@@ -120,6 +120,11 @@ func (s *Store) migrate() error {
 		return fmt.Errorf("failed to create executions table: %w", err)
 	}
 
+	// Create updated at trigger
+	if err := s.createUpdatedAtTrigger(); err != nil {
+		return fmt.Errorf("failed to create updated at trigger: %w", err)
+	}
+
 	// Add missing columns (for backward compatibility)
 	if err := s.addMissingColumns(); err != nil {
 		return fmt.Errorf("failed to add missing columns: %w", err)
@@ -206,6 +211,46 @@ func (s *Store) createExecutionsTable() error {
 	_, err := s.db.Exec(query)
 	return err
 }
+func (s *Store) createUpdatedAtTrigger() error {
+	if s.driver != PostgreSQL {
+		return nil // Only needed for PostgreSQL
+	}
+
+	// Create the trigger function
+	triggerFunc := `
+		CREATE OR REPLACE FUNCTION update_updated_at_column()
+		RETURNS TRIGGER AS $$
+		BEGIN
+			NEW.updated_at = EXTRACT(EPOCH FROM NOW());
+			RETURN NEW;
+		END;
+		$$ language 'plpgsql';
+	`
+
+	if _, err := s.db.Exec(triggerFunc); err != nil {
+		return fmt.Errorf("failed to create trigger function: %w", err)
+	}
+
+	// Create triggers for both tables (PostgreSQL doesn't support IF NOT EXISTS for triggers)
+	triggers := []string{
+		`DROP TRIGGER IF EXISTS update_apollo_jobs_updated_at ON apollo_jobs;
+		 CREATE TRIGGER update_apollo_jobs_updated_at 
+		 BEFORE UPDATE ON apollo_jobs 
+		 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+		`DROP TRIGGER IF EXISTS update_apollo_executions_updated_at ON apollo_executions;
+		 CREATE TRIGGER update_apollo_executions_updated_at 
+		 BEFORE UPDATE ON apollo_executions 
+		 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+	}
+
+	for _, trigger := range triggers {
+		if _, err := s.db.Exec(trigger); err != nil {
+			return fmt.Errorf("failed to create trigger: %w", err)
+		}
+	}
+
+	return nil
+}
 
 func (s *Store) addMissingColumns() error {
 	columns := []struct {
@@ -217,6 +262,31 @@ func (s *Store) addMissingColumns() error {
 		{"apollo_jobs", "image", "TEXT"},
 		{"apollo_executions", "prefix", "TEXT"},
 		{"apollo_executions", "image", "TEXT"},
+	}
+
+	// Add database-specific timestamp columns
+	if s.driver == PostgreSQL {
+		columns = append(columns, []struct {
+			table  string
+			column string
+			def    string
+		}{
+			{"apollo_executions", "created_at", "BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())"},
+			{"apollo_executions", "updated_at", "BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())"},
+			{"apollo_jobs", "created_at", "BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())"},
+			{"apollo_jobs", "updated_at", "BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())"},
+		}...)
+	} else {
+		columns = append(columns, []struct {
+			table  string
+			column string
+			def    string
+		}{
+			{"apollo_executions", "created_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
+			{"apollo_executions", "updated_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
+			{"apollo_jobs", "created_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
+			{"apollo_jobs", "updated_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
+		}...)
 	}
 
 	for _, col := range columns {

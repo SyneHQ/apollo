@@ -16,12 +16,20 @@ type Scheduler struct {
 }
 
 func New() *Scheduler {
-	c := cron.New(cron.WithSeconds())
+	// Accept both:
+	// - 5-field cron: "min hour dom month dow" (e.g. "0 0 * * *")
+	// - 6-field cron: "sec min hour dom month dow" (e.g. "0 0 0 * * *")
+	//
+	// Using WithSeconds() would require exactly 6 fields and breaks standard cron specs.
+	parser := cron.NewParser(
+		cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
+	)
+	c := cron.New(cron.WithParser(parser))
 	c.Start()
 	return &Scheduler{cron: c, entries: map[string]cron.EntryID{}}
 }
 
-// Schedule uses standard cron syntax (with seconds): "* * * * * *"
+// Schedule supports standard 5-field cron ("min hour dom month dow") and 6-field cron with seconds.
 func (s *Scheduler) Schedule(name string, spec string, fn JobFunc) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

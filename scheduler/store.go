@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/lib/pq" // PostgreSQL
 	_ "modernc.org/sqlite"
 )
@@ -303,7 +304,39 @@ func (s *Store) addMissingColumns() error {
 }
 
 func (s *Store) createIndexes() error {
+	// Ensure UPSERT conflict targets are backed by a unique constraint/index.
+	// This is especially important for older databases that predate PRIMARY KEY constraints,
+	// since CREATE TABLE IF NOT EXISTS will not modify existing tables.
+	//
+	// Note: PostgreSQL will refuse to create a unique index if duplicates already exist.
+	// We proactively dedupe by keeping the "newest" record per id (best-effort).
+	if s.driver == PostgreSQL {
+		// Best-effort de-duplication to allow creating a unique index on (id).
+		// Keeps the row with the latest finished_at/started_at/created_at.
+		dedupe := `
+			WITH ranked AS (
+				SELECT
+					ctid,
+					ROW_NUMBER() OVER (
+						PARTITION BY id
+						ORDER BY
+							COALESCE(finished_at, started_at, created_at) DESC NULLS LAST,
+							created_at DESC NULLS LAST
+					) AS rn
+				FROM apollo_executions
+			)
+			DELETE FROM apollo_executions e
+			USING ranked r
+			WHERE e.ctid = r.ctid AND r.rn > 1
+		`
+		if _, err := s.db.Exec(dedupe); err != nil {
+			return fmt.Errorf("failed to dedupe apollo_executions before creating unique index: %w", err)
+		}
+	}
+
 	indexes := []string{
+		"CREATE UNIQUE INDEX IF NOT EXISTS uq_apollo_jobs_name ON apollo_jobs(name)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS uq_apollo_executions_id ON apollo_executions(id)",
 		"CREATE INDEX IF NOT EXISTS idx_apollo_executions_name_started ON apollo_executions(name, started_at DESC)",
 		"CREATE INDEX IF NOT EXISTS idx_apollo_executions_status ON apollo_executions(status)",
 	}
@@ -367,14 +400,14 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 	switch s.driver {
 	case SQLite:
 		query = `INSERT OR REPLACE INTO apollo_jobs 
-            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`
-		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
+            (id, name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`
+		args = []interface{}{uuid.New().String(), r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
 
 	case PostgreSQL:
 		query = `INSERT INTO apollo_jobs 
-            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, EXTRACT(EPOCH FROM NOW()))
+            (id, name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, EXTRACT(EPOCH FROM NOW()))
             ON CONFLICT(name) DO UPDATE SET 
                 command = EXCLUDED.command, 
                 args_base64 = EXCLUDED.args_base64, 
@@ -384,7 +417,7 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
                 image = EXCLUDED.image,
                 prefix = EXCLUDED.prefix,
                 updated_at = EXTRACT(EPOCH FROM NOW())`
-		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
+		args = []interface{}{uuid.New().String(), r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
 
 	default:
 		return fmt.Errorf("unsupported database driver: %s", s.driver)

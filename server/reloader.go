@@ -49,8 +49,16 @@ func (s *JobsServer) Reload(ctx context.Context) {
 			log.Printf("failed to restore schedule for %s: %v", r.Name, err)
 		}
 		log.Printf("restored schedule for %s", r.Name)
+
 		// small delay to avoid thundering herd on boot
 		time.Sleep(50 * time.Millisecond)
+
+		nextRun, ok := s.sched.NextRun(r.Name)
+		if !ok {
+			log.Printf("no next run found for %s", r.Name)
+			continue
+		}
+		log.Printf("next run for %s: %s", r.Name, nextRun.Format(time.RFC3339))
 	}
 
 	log.Printf("restored %d schedules", len(records))

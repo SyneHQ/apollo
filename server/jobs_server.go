@@ -74,6 +74,13 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			return err
 		})
 
+		nextRun, ok := s.sched.NextRun(r.Name)
+		if !ok {
+			log.Printf("no next run found for %s", r.Name)
+		} else {
+			log.Printf("next run for %s: %s", r.Name, nextRun.Format(time.RFC3339))
+		}
+
 		if err != nil {
 			return nil, err
 		}

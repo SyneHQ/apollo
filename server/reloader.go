@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -26,6 +27,7 @@ func (s *JobsServer) Reload(ctx context.Context) {
 			r.Prefix = s.cfg.Jobs.Cmd
 		}
 		req := runner.JobRequest{
+			JobID:          fmt.Sprintf("%s-%d", r.Name, time.Now().Unix()),
 			Name:           r.Name,
 			Command:        r.Command,
 			ArgsJSONBase64: r.ArgsBase64,
@@ -37,7 +39,13 @@ func (s *JobsServer) Reload(ctx context.Context) {
 		}
 		spec := r.CronSpec
 		err := s.sched.Schedule(r.Name, spec, func(c context.Context) {
-			_, _ = s.runner.RunJob(c, r.Prefix, req)
+			start := time.Now().Unix()
+			result, err := s.runner.RunJob(c, r.Prefix, req)
+			end := time.Now().Unix()
+			if err != nil {
+				log.Printf("failed to run job for %s: %v", r.Name, err)
+			}
+			s.recordExecution(c, req, req.JobID, result, err, start, end)
 		})
 		if err != nil {
 			log.Printf("failed to restore schedule for %s: %v", r.Name, err)

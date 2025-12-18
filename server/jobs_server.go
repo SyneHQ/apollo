@@ -63,9 +63,8 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		name := r.Name
 		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) {
 			start := time.Now().Unix()
-			if r.JobID == "" {
-				r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
-			}
+
+			r.JobID = fmt.Sprintf("%s-%d", name, time.Now().Unix())
 
 			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
 			result, runErr := s.runner.RunJob(c, r.Prefix, r)
@@ -99,9 +98,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 	start := time.Now().Unix()
 
-	if r.JobID == "" {
-		r.JobID = fmt.Sprintf("job-%s-%d", req.Name, time.Now().Unix())
-	}
+	r.JobID = fmt.Sprintf("%s-%d", r.Name, time.Now().Unix())
 
 	log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
 

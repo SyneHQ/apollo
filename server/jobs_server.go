@@ -10,6 +10,7 @@ import (
 	"github.com/SyneHQ/apollo/proto"
 	"github.com/SyneHQ/apollo/runner"
 	"github.com/SyneHQ/apollo/scheduler"
+	"github.com/robfig/cron/v3"
 )
 
 type JobsServer struct {
@@ -24,7 +25,7 @@ func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
 	var sch *scheduler.Scheduler
 	var st *scheduler.Store
 	if c.JobsProvider == "local" && c.Store.Driver != "" && c.Store.Path != "" {
-		sch = scheduler.New()
+		sch = scheduler.New(cron.DefaultLogger)
 		// best-effort open local sqlite at ./jobs.db
 		log.Println("Opening store", c.Store.Driver)
 		s, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
@@ -61,19 +62,22 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 	if r.Type == runner.JobTypeRepeatable && s.sched != nil && r.ScheduleSpec != "" {
 		name := r.Name
-		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) {
+		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) error {
 			start := time.Now().Unix()
 
 			r.JobID = fmt.Sprintf("%s-%d", name, time.Now().Unix())
 
 			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
-			result, runErr := s.runner.RunJob(c, r.Prefix, r)
+			result, err := s.runner.RunJob(c, r.Prefix, r)
 			end := time.Now().Unix()
-			s.recordExecution(c, r, r.JobID, result, runErr, start, end)
+			s.recordExecution(c, r, r.JobID, result, err, start, end)
+			return err
 		})
+
 		if err != nil {
 			return nil, err
 		}
+
 		if s.store != nil {
 			err = s.store.Upsert(ctx, scheduler.JobRecord{
 				Name:       r.Name,

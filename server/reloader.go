@@ -38,14 +38,12 @@ func (s *JobsServer) Reload(ctx context.Context) {
 			ScheduleSpec:   r.CronSpec,
 		}
 		spec := r.CronSpec
-		err := s.sched.Schedule(r.Name, spec, func(c context.Context) {
+		err := s.sched.Schedule(r.Name, spec, func(c context.Context) error {
 			start := time.Now().Unix()
 			result, err := s.runner.RunJob(c, r.Prefix, req)
 			end := time.Now().Unix()
-			if err != nil {
-				log.Printf("failed to run job for %s: %v", r.Name, err)
-			}
 			s.recordExecution(c, req, req.JobID, result, err, start, end)
+			return err
 		})
 		if err != nil {
 			log.Printf("failed to restore schedule for %s: %v", r.Name, err)

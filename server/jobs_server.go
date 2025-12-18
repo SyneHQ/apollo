@@ -26,6 +26,8 @@ func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
 	var st *scheduler.Store
 	if c.JobsProvider == "local" && c.Store.Driver != "" && c.Store.Path != "" {
 		sch = scheduler.New(cron.DefaultLogger)
+		// Start the cron loop immediately so restored schedules compute Next runs.
+		sch.Start()
 		// best-effort open local sqlite at ./jobs.db
 		log.Println("Opening store", c.Store.Driver)
 		s, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)

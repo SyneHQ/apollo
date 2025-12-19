@@ -19,7 +19,7 @@ pre-build:
 	# Start the server in the background, wait for it to be ready, then run tests
 	make run &
 	# Wait for the gRPC server to start (adjust sleep as needed)
-	sleep 10
+	sleep 15
 	make test 
 	sleep 2
 	make kill-local-server

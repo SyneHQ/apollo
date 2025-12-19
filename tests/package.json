@@ -1,0 +1,15 @@
+{
+  "name": "tests",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@synehq/apollo": "^0.0.9"
+  }
+}

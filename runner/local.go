@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/infisical/go-sdk/packages/models"
@@ -33,6 +35,11 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	image := l.Image
 	if req.Image != "" {
 		image = req.Image
+	}
+
+	// Pull image if it doesn't exist locally
+	if err := l.ensureImageExists(ctx, cli, image); err != nil {
+		return "", fmt.Errorf("failed to ensure image exists: %w", err)
 	}
 
 	resourceLimits, err := l.buildResourceLimits(req)
@@ -98,6 +105,32 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	}
 
 	return logs, nil
+}
+
+func (l *LocalRunner) ensureImageExists(ctx context.Context, cli *client.Client, imageName string) error {
+	// Check if image exists locally
+	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	if err == nil {
+		// Image exists locally
+		return nil
+	}
+
+	// Image doesn't exist, pull it
+	fmt.Printf("Image %s not found locally, pulling...\n", imageName)
+	reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to pull image %s: %w", imageName, err)
+	}
+	defer reader.Close()
+
+	// Read the pull output to ensure it completes
+	_, err = io.Copy(io.Discard, reader)
+	if err != nil {
+		return fmt.Errorf("failed to read image pull output: %w", err)
+	}
+
+	fmt.Printf("Successfully pulled image %s\n", imageName)
+	return nil
 }
 
 func (l *LocalRunner) buildEnvVars(req JobRequest) []string {

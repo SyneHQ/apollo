@@ -1,11 +1,16 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/infisical/go-sdk/packages/models"
 )
 
@@ -19,95 +24,158 @@ func NewLocalRunner(image string, secrets []models.Secret) *LocalRunner {
 }
 
 func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (string, error) {
-	// Run container using docker with bun command inside image
-	// Example: docker run --rm <image> rover <command> <argsBase64>
-	args := []string{"run", "--rm"}
-
-	args = append(args, "--name", req.Name)
-
-	args, err := l.AppendSecrets(ctx, req, args)
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		fmt.Printf("Error appending secrets: %v\n", err)
-		return "", err
+		return "", fmt.Errorf("failed to create docker client: %w", err)
 	}
-
-	args, err = l.AppendOverrides(ctx, req, args)
-	if err != nil {
-		fmt.Printf("Error appending overrides: %v\n", err)
-		return "", err
-	}
+	defer cli.Close()
 
 	image := l.Image
 	if req.Image != "" {
 		image = req.Image
 	}
 
-	args, err = l.LimitResources(ctx, req, args)
+	resourceLimits, err := l.buildResourceLimits(req)
 	if err != nil {
 		fmt.Printf("Error limiting resources: %v\n", err)
 		return "", err
 	}
 
-	args = append(args, image, _cmd, req.Command)
+	envVars := l.buildEnvVars(req)
+	cmdArgs := l.buildCmdArgs(_cmd, req)
+
+	fmt.Printf("Running container %s with image %s and cmd %s\n", req.Name, image, strings.Join(cmdArgs, " "))
+
+	containerCfg := &container.Config{
+		Image: image,
+		Cmd:   cmdArgs,
+		Env:   envVars,
+	}
+
+	hostCfg := &container.HostConfig{
+		AutoRemove: false, // remove explicitly after reading logs
+		Resources:  resourceLimits,
+	}
+
+	created, err := cli.ContainerCreate(ctx, containerCfg, hostCfg, nil, nil, req.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to create container: %w", err)
+	}
+
+	defer func() {
+		_ = cli.ContainerRemove(context.Background(), created.ID, container.RemoveOptions{
+			Force:         true,
+			RemoveVolumes: true,
+		})
+	}()
+
+	if err := cli.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
+		return "", fmt.Errorf("failed to start container: %w", err)
+	}
+
+	statusCh, errCh := cli.ContainerWait(ctx, created.ID, container.WaitConditionNotRunning)
+
+	var waitStatus container.WaitResponse
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return "", fmt.Errorf("failed while waiting for container: %w", err)
+		}
+	case waitStatus = <-statusCh:
+	}
+
+	logs, err := l.readContainerLogs(ctx, cli, created.ID)
+	if err != nil {
+		return "", fmt.Errorf("failed to read container logs: %w", err)
+	}
+
+	if waitStatus.Error != nil && waitStatus.Error.Message != "" {
+		return "", fmt.Errorf("container error: %s: %s", waitStatus.Error.Message, logs)
+	}
+
+	if waitStatus.StatusCode != 0 {
+		return "", fmt.Errorf("local run failed: exit code %d: %s", waitStatus.StatusCode, logs)
+	}
+
+	return logs, nil
+}
+
+func (l *LocalRunner) buildEnvVars(req JobRequest) []string {
+	envs := make(map[string]string)
+
+	for _, secret := range l.Secrets {
+		envs[secret.SecretKey] = secret.SecretValue
+	}
+
+	if req.Overrides != nil && len(req.Overrides.Env) > 0 {
+		for _, envVar := range req.Overrides.Env {
+			envs[envVar.Name] = envVar.Value
+		}
+	}
+
+	keys := make([]string, 0, len(envs))
+	for k := range envs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	built := make([]string, 0, len(keys))
+	for _, k := range keys {
+		built = append(built, fmt.Sprintf("%s=%s", k, envs[k]))
+	}
+
+	return built
+}
+
+func (l *LocalRunner) buildCmdArgs(_cmd string, req JobRequest) []string {
+	args := []string{_cmd, req.Command}
 
 	if req.ArgsJSONBase64 != "" {
 		args = append(args, req.ArgsJSONBase64)
 	}
 
-	// Use overrides if provided, otherwise use default args
 	if req.Overrides != nil && len(req.Overrides.Args) > 0 {
 		args = append(args, req.Overrides.Args...)
 	}
 
-	fmt.Printf("Running command: %s\n", strings.Join(args, " "))
-
-	cmd := exec.CommandContext(ctx, "docker", args...)
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("local run failed: %w: %s", err, string(out))
-	}
-	return string(out), nil
+	return args
 }
 
-func (l *LocalRunner) AppendSecrets(ctx context.Context, req JobRequest, args []string) ([]string, error) {
-	// Inject Infisical secrets as environment variables
-	for _, secret := range l.Secrets {
-		args = append(args, "-e", secret.SecretKey+"="+secret.SecretValue)
-	}
-	return args, nil
-}
-
-func (l *LocalRunner) LimitResources(ctx context.Context, req JobRequest, args []string) ([]string, error) {
-	// Use overrides if provided, otherwise use default resources
-	resources := req.Resources
+func (l *LocalRunner) buildResourceLimits(req JobRequest) (container.Resources, error) {
+	limits := req.Resources
 	if req.Overrides != nil && req.Overrides.Resources != nil {
-		resources = *req.Overrides.Resources
+		limits = *req.Overrides.Resources
 	}
 
-	// we need to read memory and cpu limits and apply those limits
-	args = append(args, "--memory", resources.Memory, "--cpus", resources.CPU)
-	return args, nil
-}
-
-func (l *LocalRunner) AppendOverrides(ctx context.Context, req JobRequest, args []string) ([]string, error) {
-	// Append client-provided environment variables from overrides
-	// These will override Infisical secrets if there are conflicts
-	if req.Overrides != nil && len(req.Overrides.Env) > 0 {
-		for _, envVar := range req.Overrides.Env {
-			args = append(args, "-e", envVar.Name+"="+envVar.Value)
-		}
+	memoryBytes, err := parseMemoryBytes(limits.Memory)
+	if err != nil {
+		return container.Resources{}, fmt.Errorf("invalid memory limit %q: %w", limits.Memory, err)
 	}
-	return args, nil
+
+	nanoCPUs, err := parseNanoCPUs(limits.CPU)
+	if err != nil {
+		return container.Resources{}, fmt.Errorf("invalid cpu limit %q: %w", limits.CPU, err)
+	}
+
+	return container.Resources{
+		Memory:   memoryBytes,
+		NanoCPUs: nanoCPUs,
+	}, nil
 }
 
 func (l *LocalRunner) DeleteJob(ctx context.Context, name string) error {
-	// local one-off containers are ephemeral; nothing to delete
-	// cancel the container if it's running
-	cmd := exec.CommandContext(ctx, "docker", "rm", "-f", name)
-	out, err := cmd.CombinedOutput()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return fmt.Errorf("failed to delete container: %w: %s", err, string(out))
+		return fmt.Errorf("failed to create docker client: %w", err)
+	}
+	defer cli.Close()
+
+	err = cli.ContainerRemove(ctx, name, container.RemoveOptions{
+		Force:         true,
+		RemoveVolumes: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete container: %w", err)
 	}
 	return nil
 }
@@ -115,4 +183,86 @@ func (l *LocalRunner) DeleteJob(ctx context.Context, name string) error {
 func (l *LocalRunner) UpdateSchedule(ctx context.Context, name string, spec string) error {
 	// scheduling is handled by the in-memory scheduler in the server for local provider
 	return nil
+}
+
+func (l *LocalRunner) readContainerLogs(ctx context.Context, cli *client.Client, id string) (string, error) {
+	reader, err := cli.ContainerLogs(ctx, id, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     false,
+		Timestamps: false,
+		Tail:       "all",
+	})
+	if err != nil {
+		return "", err
+	}
+	defer reader.Close()
+
+	var buf bytes.Buffer
+	if _, err := stdcopy.StdCopy(&buf, &buf, reader); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func parseMemoryBytes(memory string) (int64, error) {
+	mem := strings.TrimSpace(strings.ToUpper(memory))
+	if mem == "" {
+		return 0, nil
+	}
+
+	switch {
+	case strings.HasSuffix(mem, "GI"):
+		val, err := strconv.ParseInt(strings.TrimSuffix(mem, "GI"), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return val * 1024 * 1024 * 1024, nil
+	case strings.HasSuffix(mem, "MI"):
+		val, err := strconv.ParseInt(strings.TrimSuffix(mem, "MI"), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return val * 1024 * 1024, nil
+	case strings.HasSuffix(mem, "G"):
+		val, err := strconv.ParseInt(strings.TrimSuffix(mem, "G"), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return val * 1024 * 1024 * 1024, nil
+	case strings.HasSuffix(mem, "M"):
+		val, err := strconv.ParseInt(strings.TrimSuffix(mem, "M"), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return val * 1024 * 1024, nil
+	default:
+		val, err := strconv.ParseInt(mem, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return val, nil
+	}
+}
+
+func parseNanoCPUs(cpu string) (int64, error) {
+	c := strings.TrimSpace(cpu)
+	if c == "" {
+		return 0, nil
+	}
+
+	if strings.HasSuffix(c, "m") {
+		val, err := strconv.ParseInt(strings.TrimSuffix(c, "m"), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return val * 1_000_000, nil
+	}
+
+	f, err := strconv.ParseFloat(c, 64)
+	if err != nil {
+		return 0, err
+	}
+	return int64(f * 1_000_000_000), nil
 }

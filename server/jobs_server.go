@@ -72,6 +72,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
 			result, err := s.runner.RunJob(c, r.Prefix, r)
 			end := time.Now().Unix()
+			log.Printf("Job %s completed with result: %s", r.JobID, result)
 			s.recordExecution(c, r, r.JobID, result, err, start, end)
 			return err
 		})

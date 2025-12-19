@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/infisical/go-sdk/packages/models"
 )
@@ -41,22 +42,24 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 		image = req.Image
 	}
 
-	args = append(args, image, _cmd, req.Command)
-
-	if req.ArgsJSONBase64 != "" {
-		args = append(args, req.ArgsJSONBase64)
-	}
-
 	args, err = l.LimitResources(ctx, req, args)
 	if err != nil {
 		fmt.Printf("Error limiting resources: %v\n", err)
 		return "", err
 	}
 
+	args = append(args, image, _cmd, req.Command)
+
+	if req.ArgsJSONBase64 != "" {
+		args = append(args, req.ArgsJSONBase64)
+	}
+
 	// Use overrides if provided, otherwise use default args
 	if req.Overrides != nil && len(req.Overrides.Args) > 0 {
 		args = append(args, req.Overrides.Args...)
 	}
+
+	fmt.Printf("Running command: %s\n", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 

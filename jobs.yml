@@ -24,11 +24,7 @@ secrets:
     value: $FLOWR_API_KEY\
 
   - name: NEXT_PUBLIC_APP_URL
-    value: $NEXT_PUBLIC_APP_URL
-
-  - name: BUN_BE_BUN
-    value: 1
-    
+    value: $NEXT_PUBLIC_APP_URL    
 jobs:
   - name: handleBackupJob
     resources:

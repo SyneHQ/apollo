@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	_ "github.com/lib/pq" // PostgreSQL
 	_ "modernc.org/sqlite"
 )
@@ -291,12 +290,17 @@ func (s *Store) addMissingColumns() error {
 	}
 
 	for _, col := range columns {
-		query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s %s", col.table, col.column, col.def)
+		exists, err := s.columnExists(context.Background(), col.table, col.column)
+		if err != nil {
+			return fmt.Errorf("failed to check column %s.%s: %w", col.table, col.column, err)
+		}
+		if exists {
+			continue
+		}
+
+		query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", col.table, col.column, col.def)
 		if _, err := s.db.Exec(query); err != nil {
-			// Ignore "duplicate column" errors for databases that don't support IF NOT EXISTS
-			if !s.isColumnExistsError(err) {
-				return fmt.Errorf("failed to add column %s.%s: %w", col.table, col.column, err)
-			}
+			return fmt.Errorf("failed to add column %s.%s: %w", col.table, col.column, err)
 		}
 	}
 
@@ -350,24 +354,30 @@ func (s *Store) createIndexes() error {
 	return nil
 }
 
-func (s *Store) isColumnExistsError(err error) bool {
-	errStr := err.Error()
-	return contains(errStr, "duplicate column") || contains(errStr, "already exists")
-}
+func (s *Store) columnExists(ctx context.Context, table, column string) (bool, error) {
+	var query string
+	var args []interface{}
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) &&
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-			indexOf(s, substr) >= 0)))
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
+	switch s.driver {
+	case SQLite:
+		query = fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table)
+		args = []interface{}{column}
+	case PostgreSQL:
+		query = `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`
+		args = []interface{}{table, column}
+	default:
+		return false, fmt.Errorf("unsupported database driver: %s", s.driver)
 	}
-	return -1
+
+	row := s.db.QueryRowContext(ctx, query, args...)
+	var dummy int
+	if err := row.Scan(&dummy); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // Close closes the database connection
@@ -400,14 +410,14 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 	switch s.driver {
 	case SQLite:
 		query = `INSERT OR REPLACE INTO apollo_jobs 
-            (id, name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`
-		args = []interface{}{uuid.New().String(), r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
+            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`
+		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
 
 	case PostgreSQL:
 		query = `INSERT INTO apollo_jobs 
-            (id, name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, EXTRACT(EPOCH FROM NOW()))
+            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, EXTRACT(EPOCH FROM NOW()))
             ON CONFLICT(name) DO UPDATE SET 
                 command = EXCLUDED.command, 
                 args_base64 = EXCLUDED.args_base64, 
@@ -417,7 +427,7 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
                 image = EXCLUDED.image,
                 prefix = EXCLUDED.prefix,
                 updated_at = EXTRACT(EPOCH FROM NOW())`
-		args = []interface{}{uuid.New().String(), r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
+		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
 
 	default:
 		return fmt.Errorf("unsupported database driver: %s", s.driver)

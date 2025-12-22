@@ -51,8 +51,6 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	envVars := l.buildEnvVars(req)
 	cmdArgs := l.buildCmdArgs(_cmd, req)
 
-	fmt.Printf("Running container %s with image %s and cmd %s\n", req.Name, image, strings.Join(cmdArgs, " "))
-
 	containerCfg := &container.Config{
 		Image: image,
 		Cmd:   cmdArgs,

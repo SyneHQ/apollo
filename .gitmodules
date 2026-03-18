@@ -2,3 +2,8 @@
 	path = worker.ts
 	url = https://github.com/synehq/worker.ts.git
 	branch = sudo
+
+[submodule "flowr"]
+	path = flowr
+	url = https://github.com/synehq/flowr.git
+	branch = sudo

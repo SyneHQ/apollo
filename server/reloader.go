@@ -23,9 +23,6 @@ func (s *JobsServer) Reload(ctx context.Context) {
 	log.Printf("restoring %d schedules", len(records))
 
 	for _, r := range records {
-		if r.Prefix == "" {
-			r.Prefix = s.cfg.Jobs.Cmd
-		}
 		req := runner.JobRequest{
 			JobID:          fmt.Sprintf("%s-%d", r.Name, time.Now().Unix()),
 			Name:           r.Name,

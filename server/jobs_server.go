@@ -58,10 +58,6 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 		r.Resources.Memory = res.Memory
 	}
 
-	if r.Prefix == "" {
-		r.Prefix = s.cfg.Jobs.Cmd
-	}
-
 	if r.Type == runner.JobTypeRepeatable && s.sched != nil && r.ScheduleSpec != "" {
 		name := r.Name
 		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) error {

@@ -9,10 +9,10 @@
     "build": "bun build index.ts --outdir dist --target bun"
   },
   "dependencies": {
-    "redis": "^4.6.10"
+    "redis": "^4.7.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.19.43"
   }
 }

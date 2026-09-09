@@ -8,23 +8,29 @@ secrets:
   - name: KMS_API_URL
     value: $KMS_API_URL
 
+  - name: SYNE_KMS_SERVICE_TOKEN
+    value: $SYNE_KMS_SERVICE_TOKEN
+
+  - name: SYNE_KMS_CA_PEM
+    value: $SYNE_KMS_CA_PEM
+
+  - name: GOOGLE_CLOUD_PROJECT
+    value: $GOOGLE_CLOUD_PROJECT
+
+  - name: R09PR0xFX0FQUExJQ0FUSU9OX0NSRURFTlRJQUw
+    value: $R09PR0xFX0FQUExJQ0FUSU9OX0NSRURFTlRJQUw
+
   - name: KORI_EMAIL_API_KEY
     value: $KORI_EMAIL_API_KEY
 
   - name: KORI_EMAIL_API_URL
     value: $KORI_EMAIL_API_URL
 
-  - name: NODE_ENV
-    value: $NODE_ENV
-  
   - name: FLOWR_API_URL
     value: $FLOWR_API_URL
 
-  - name: FLOWR_API_KEY
-    value: $FLOWR_API_KEY\
-
   - name: NEXT_PUBLIC_APP_URL
-    value: $NEXT_PUBLIC_APP_URL    
+    value: $NEXT_PUBLIC_APP_URL
 jobs:
   - name: handleBackupJob
     resources:

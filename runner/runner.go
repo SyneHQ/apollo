@@ -10,6 +10,7 @@ const (
 )
 
 type JobRequest struct {
+	AuthorizedUser string
 	Name           string
 	Image          string
 	JobID          string // Optional: if not provided, will be auto-generated

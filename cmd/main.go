@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net"
 	"os"
@@ -56,8 +57,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	grpcServer := grpc.NewServer()
+	token := os.Getenv("APOLLO_SERVICE_TOKEN")
+	if len(token) < 32 {
+		log.Fatal("APOLLO_SERVICE_TOKEN must contain at least 32 characters")
+	}
+	metadataDB, err := sql.Open("postgres", os.Getenv("METADATA_DATABASE_URL"))
+	if err != nil {
+		log.Fatal("metadata authorization database unavailable")
+	}
+	defer metadataDB.Close()
+	authority := jobsserver.SQLJobAuthority{DB: metadataDB}
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(jobsserver.Authorization(token, authority)), grpc.MaxRecvMsgSize(128*1024))
 	js := jobsserver.NewJobsServer(r, config)
+	js.SetAuthority(authority)
 	js.Reload(context.Background())
 	proto.RegisterJobsServiceServer(grpcServer, js)
 	go func() {

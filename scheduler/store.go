@@ -13,14 +13,15 @@ import (
 
 // JobRecord represents a scheduled job configuration
 type JobRecord struct {
-	Name       string
-	Command    string
-	Prefix     string
-	ArgsBase64 string
-	CronSpec   string
-	Cpu        string
-	Memory     string
-	Image      string
+	AuthorizedUser string
+	Name           string
+	Command        string
+	Prefix         string
+	ArgsBase64     string
+	CronSpec       string
+	Cpu            string
+	Memory         string
+	Image          string
 }
 
 // ExecutionRecord represents a job execution instance
@@ -259,6 +260,7 @@ func (s *Store) addMissingColumns() error {
 		def    string
 	}{
 		{"apollo_jobs", "prefix", "TEXT"},
+		{"apollo_jobs", "authorized_user", "TEXT NOT NULL DEFAULT ''"},
 		{"apollo_jobs", "image", "TEXT"},
 		{"apollo_executions", "prefix", "TEXT"},
 		{"apollo_executions", "image", "TEXT"},
@@ -410,14 +412,14 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
 	switch s.driver {
 	case SQLite:
 		query = `INSERT OR REPLACE INTO apollo_jobs 
-            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`
-		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
+            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, authorized_user, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))`
+		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix, r.AuthorizedUser}
 
 	case PostgreSQL:
 		query = `INSERT INTO apollo_jobs 
-            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, EXTRACT(EPOCH FROM NOW()))
+            (name, command, args_base64, cron_spec, cpu, memory, image, prefix, authorized_user, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, EXTRACT(EPOCH FROM NOW()))
             ON CONFLICT(name) DO UPDATE SET 
                 command = EXCLUDED.command, 
                 args_base64 = EXCLUDED.args_base64, 
@@ -426,8 +428,9 @@ func (s *Store) Upsert(ctx context.Context, r JobRecord) error {
                 memory = EXCLUDED.memory,
                 image = EXCLUDED.image,
                 prefix = EXCLUDED.prefix,
+                authorized_user = EXCLUDED.authorized_user,
                 updated_at = EXTRACT(EPOCH FROM NOW())`
-		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix}
+		args = []interface{}{r.Name, r.Command, r.ArgsBase64, r.CronSpec, r.Cpu, r.Memory, r.Image, r.Prefix, r.AuthorizedUser}
 
 	default:
 		return fmt.Errorf("unsupported database driver: %s", s.driver)
@@ -473,7 +476,7 @@ func (s *Store) Delete(ctx context.Context, name string) error {
 
 // List returns all job records
 func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
-	query := `SELECT name, command, args_base64, cron_spec, cpu, memory, image, prefix 
+	query := `SELECT name, command, args_base64, cron_spec, cpu, memory, image, prefix, authorized_user
         FROM apollo_jobs ORDER BY name`
 
 	rows, err := s.db.QueryContext(ctx, query)
@@ -486,7 +489,7 @@ func (s *Store) List(ctx context.Context) ([]JobRecord, error) {
 	for rows.Next() {
 		var r JobRecord
 		err := rows.Scan(&r.Name, &r.Command, &r.ArgsBase64, &r.CronSpec,
-			&r.Cpu, &r.Memory, &r.Image, &r.Prefix)
+			&r.Cpu, &r.Memory, &r.Image, &r.Prefix, &r.AuthorizedUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan job record: %w", err)
 		}

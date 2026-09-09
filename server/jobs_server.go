@@ -15,10 +15,11 @@ import (
 
 type JobsServer struct {
 	proto.UnimplementedJobsServiceServer
-	runner runner.Runner
-	cfg    *cfg.Config
-	sched  *scheduler.Scheduler
-	store  *scheduler.Store
+	runner    runner.Runner
+	cfg       *cfg.Config
+	sched     *scheduler.Scheduler
+	store     *scheduler.Store
+	authority JobAuthority
 }
 
 func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
@@ -41,7 +42,12 @@ func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
 }
 
 func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*proto.RunJobResponse, error) {
+	if req.Resources == nil {
+		req.Resources = &proto.Resources{}
+	}
+	user, _ := ctx.Value(userContextKey{}).(string)
 	r := runner.JobRequest{
+		AuthorizedUser: user,
 		Name:           req.GetName(),
 		Command:        req.GetCommand(),
 		Image:          req.GetImage(),
@@ -66,7 +72,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			r.JobID = fmt.Sprintf("%s-%d", name, time.Now().Unix())
 
 			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
-			result, err := s.runner.RunJob(c, r.Prefix, r)
+			result, err := s.runAuthorized(c, r.Prefix, r)
 			end := time.Now().Unix()
 			log.Printf("Job %s completed with result: %s", r.JobID, result)
 			s.recordExecution(c, r, r.JobID, result, err, start, end)
@@ -86,14 +92,15 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 		if s.store != nil {
 			err = s.store.Upsert(ctx, scheduler.JobRecord{
-				Name:       r.Name,
-				Image:      r.Image,
-				Command:    r.Command,
-				Cpu:        r.Resources.CPU,
-				Memory:     r.Resources.Memory,
-				Prefix:     r.Prefix,
-				CronSpec:   r.ScheduleSpec,
-				ArgsBase64: r.ArgsJSONBase64,
+				Name:           r.Name,
+				AuthorizedUser: r.AuthorizedUser,
+				Image:          r.Image,
+				Command:        r.Command,
+				Cpu:            r.Resources.CPU,
+				Memory:         r.Resources.Memory,
+				Prefix:         r.Prefix,
+				CronSpec:       r.ScheduleSpec,
+				ArgsBase64:     r.ArgsJSONBase64,
 			})
 
 			if err != nil {
@@ -114,7 +121,7 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 	s.recordExecution(ctx, r, r.JobID, "", nil, start, 0)
 
-	result, err := s.runner.RunJob(ctx, r.Prefix, r)
+	result, err := s.runAuthorized(ctx, r.Prefix, r)
 
 	end := time.Now().Unix()
 
@@ -212,6 +219,14 @@ func (s *JobsServer) ListSchedules(ctx context.Context, req *proto.ListSchedules
 	}
 	out := make([]*proto.ScheduleItem, 0, len(recs))
 	for _, r := range recs {
+		team, _ := ctx.Value(teamContextKey{}).(string)
+		if s.authority == nil || team == "" {
+			continue
+		}
+		owner, err := s.authority.Owner(ctx, r.Name, false)
+		if err != nil || owner != team {
+			continue
+		}
 		out = append(out, &proto.ScheduleItem{
 			Name:       r.Name,
 			Command:    r.Command,

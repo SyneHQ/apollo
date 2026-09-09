@@ -24,10 +24,10 @@
     "bun-plugin-dts": "^0.3.0"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.0",
-    "google-protobuf": "^4.0.0"
+    "@grpc/grpc-js": "^1.14.4",
+    "google-protobuf": "^4.0.2"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.2"
   }
 }

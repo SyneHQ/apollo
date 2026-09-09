@@ -2,3 +2,10 @@ vendor
 node_modules
 *.db
 .env
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+**/*service-account*.json
+**/credentials*.json

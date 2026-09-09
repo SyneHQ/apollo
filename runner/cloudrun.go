@@ -52,6 +52,9 @@ func (b *BatchRunner) parent() string {
 }
 
 func (b *BatchRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (string, error) {
+	if _, err := (&LocalRunner{}).buildResourceLimits(req); err != nil {
+		return "", err
+	}
 	client, err := batch.NewClient(ctx, b.ClientOptions...)
 	if err != nil {
 		return "", err
@@ -61,7 +64,7 @@ func (b *BatchRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (s
 	// Build environment variables as a map[string]string
 	envMap := make(map[string]string)
 	// Add Infisical secrets
-	for _, secret := range b.Secrets {
+	for _, secret := range jobSecrets(req, b.Secrets) {
 		envMap[secret.SecretKey] = secret.SecretValue
 	}
 	// Add client-provided environment variables
@@ -79,8 +82,8 @@ func (b *BatchRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (s
 	runnable := &batchpb.Runnable{
 		Executable: &batchpb.Runnable_Container_{
 			Container: &batchpb.Runnable_Container{
-				ImageUri: b.Image,
-				Commands: []string{cmd},
+				ImageUri: req.Image,
+				Commands: (&LocalRunner{}).buildCmdArgs(cmd, req),
 				Options:  strings.Join(containerArgs, " "),
 			},
 		},
@@ -129,6 +132,9 @@ func (b *BatchRunner) RunJob(ctx context.Context, cmd string, req JobRequest) (s
 		Volumes:        volumes,
 	}
 
+	if strings.HasPrefix(req.Name, "flowr-pipeline-") {
+		taskSpec.MaxRunDuration = &durationpb.Duration{Seconds: 15 * 60}
+	}
 	// Task count from overrides or default to 1
 	taskCount := int64(1)
 	if req.Overrides != nil && req.Overrides.TaskCount > 0 {

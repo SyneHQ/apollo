@@ -24,6 +24,7 @@ func (s *JobsServer) Reload(ctx context.Context) {
 
 	for _, r := range records {
 		req := runner.JobRequest{
+			AuthorizedUser: r.AuthorizedUser,
 			JobID:          fmt.Sprintf("%s-%d", r.Name, time.Now().Unix()),
 			Name:           r.Name,
 			Command:        r.Command,
@@ -37,7 +38,7 @@ func (s *JobsServer) Reload(ctx context.Context) {
 		spec := r.CronSpec
 		err := s.sched.Schedule(r.Name, spec, func(c context.Context) error {
 			start := time.Now().Unix()
-			result, err := s.runner.RunJob(c, r.Prefix, req)
+			result, err := s.runAuthorized(c, r.Prefix, req)
 			end := time.Now().Unix()
 			s.recordExecution(c, req, req.JobID, result, err, start, end)
 			return err

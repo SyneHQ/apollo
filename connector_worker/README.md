@@ -33,3 +33,11 @@ Each batch retains its ID, run, timestamp and bytes during ambiguous acknowledge
 Declared fields are checked before handoff. Original source values are retained under `payload.source`, while explicitly typed fields are under `payload.fields`. Razorpay's documented Unix-second timestamps are converted; ordinary REST sources must provide offset-bearing timestamps or a reviewed adapter. Currency values and monetary strings are retained without profit or reconciliation claims.
 
 Twenty-one Python tests now include real dlt pagination over deterministic responses, a third REST manifest through the same extraction logic, lost-ack retries, partial-page resume, changed-page rejection, byte splitting, empty terminal pages and receipt mismatch. Destination tests remain separate; authenticated worker-to-Go dispatch is not enabled yet.
+
+## Merchant CSV pages
+
+`csv_pages` accepts an already authorized binary stream and its granted SHA-256, not a path or URL. It copies at most 50 MB to a private temporary file, verifies the hash, then parses only that immutable copy. UTF-8/BOM, quoted fields and multiline CSV follow Python's strict CSV parser. Headers, mapping, row shape, currency codes, field size and page size are bounded. No formulas are evaluated; their literal text stays in provenance.
+
+Resume uses a verified file plus row position and the same partial-page hash mechanism. Replacing file contents under the same identifier fails the hash check. The execution binding must include this file hash; a file ID alone is insufficient. Empty reports still produce a terminal checkpoint. XLSX remains explicitly unsupported by this first parser.
+
+Twenty-five Python tests pass, adding CSV precision/provenance, formula preservation, file replacement denial, resume, malformed encoding/header/row handling and empty reports. This is parser acceptance, not yet a live workspace file-download or authenticated ingestion claim.

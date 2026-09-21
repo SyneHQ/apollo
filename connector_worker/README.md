@@ -21,3 +21,15 @@ The dlt client suppresses request logging because DEBUG output can contain crede
 Run `PYTHONPATH=. python -m unittest discover -s tests -v` from this directory. Thirteen tests cover cross-language manifest digests, semantic validation, third-manifest compatibility, exact decimals through the installed dlt client, private/mixed DNS denial, numeric-address pinning, host/method restrictions, redirects, retry budgets, cancellation, response caps and connection cleanup. Transport adversarial cases use deterministic sockets/responses; no merchant API access is claimed.
 
 The next increment adds durable page handoff, reviewed adapters and the runner. Go remains the only SQL destination. App grants, scheduler dispatch and end-to-end authenticated acceptance are still required before enabling synchronization.
+
+## Durable REST handoff
+
+The `pages` module compiles only declared offset/page/opaque-cursor pagination to dlt. It never follows provider URLs. Missing cursors and repeated cursors fail; each invocation has a 10,000-page ceiling and a shared deadline. Generic incremental REST streams fail until an adapter defines their ordering semantics; snapshot scans can be resumed or repeated explicitly.
+
+The `handoff` module splits pages by both row and serialized-byte limits. A partial-page checkpoint records the request position, source-page hash and committed row offset. After interruption it refetches that page and rejects changed content before skipping previously committed rows. Fully committed pages store only the next position. Offset pagination on a mutable provider can still shift between pages; repeated snapshots and source-specific reconciliation remain necessary.
+
+Each batch retains its ID, run, timestamp and bytes during ambiguous acknowledgement retries. Progress advances only when the receipt matches ID, sequence, count and SHA-256 digest. The shared `worker-batch` fixture is checked by the actual Go destination validator, including HTML escapes, Unicode and a large decimal. A receipt mismatch or retry exhaustion stops extraction.
+
+Declared fields are checked before handoff. Original source values are retained under `payload.source`, while explicitly typed fields are under `payload.fields`. Razorpay's documented Unix-second timestamps are converted; ordinary REST sources must provide offset-bearing timestamps or a reviewed adapter. Currency values and monetary strings are retained without profit or reconciliation claims.
+
+Twenty-one Python tests now include real dlt pagination over deterministic responses, a third REST manifest through the same extraction logic, lost-ack retries, partial-page resume, changed-page rejection, byte splitting, empty terminal pages and receipt mismatch. Destination tests remain separate; authenticated worker-to-Go dispatch is not enabled yet.

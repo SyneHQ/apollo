@@ -1,0 +1,216 @@
+{
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "publisher": {
+    "id": "syne",
+    "name": "Syne",
+    "url": "https://synehq.com"
+  },
+  "license": "Apache-2.0",
+  "scopes": [],
+  "configuration": [
+    {
+      "key": "key_id",
+      "label": "Key ID",
+      "type": "string",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "key_secret",
+      "label": "Key secret",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "key": "year",
+      "label": "Reporting year",
+      "type": "integer",
+      "required": true,
+      "secret": false,
+      "minimum": 2000,
+      "maximum": 9999
+    },
+    {
+      "key": "month",
+      "label": "Reporting month",
+      "type": "integer",
+      "required": true,
+      "secret": false,
+      "minimum": 1,
+      "maximum": 12
+    }
+  ],
+  "streams": [
+    {
+      "id": "settlements",
+      "label": "Settlements",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "amount",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "created_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "snapshot",
+        "deletionPolicy": "preserve"
+      },
+      "request": {
+        "path": "/v1/settlements",
+        "method": "GET",
+        "recordsPath": [
+          "items"
+        ],
+        "parameters": [],
+        "pagination": {
+          "type": "offset",
+          "limitParam": "count",
+          "offsetParam": "skip",
+          "pageSize": 100
+        }
+      }
+    },
+    {
+      "id": "settlement_recon",
+      "label": "Settlement reconciliation",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "amount",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "created_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "snapshot",
+        "deletionPolicy": "preserve"
+      },
+      "request": {
+        "path": "/v1/settlements/recon/combined",
+        "method": "GET",
+        "recordsPath": [
+          "items"
+        ],
+        "parameters": [
+          {
+            "name": "year",
+            "value": {
+              "from": "config",
+              "field": "year"
+            }
+          },
+          {
+            "name": "month",
+            "value": {
+              "from": "config",
+              "field": "month"
+            }
+          }
+        ],
+        "pagination": {
+          "type": "offset",
+          "limitParam": "count",
+          "offsetParam": "skip",
+          "pageSize": 100
+        }
+      }
+    }
+  ],
+  "capabilities": {
+    "preview": true,
+    "fullRefresh": true,
+    "incremental": false,
+    "liveQuery": false,
+    "webhooks": false
+  },
+  "destinations": [
+    "postgresql_via_go"
+  ],
+  "limits": {
+    "previewRows": 25,
+    "batchRows": 250,
+    "responseBytes": 2097152,
+    "timeoutSeconds": 30,
+    "retryAttempts": 3,
+    "concurrency": 1
+  },
+  "permissions": {
+    "source": "read",
+    "destination": "write",
+    "localFiles": false
+  },
+  "compatibility": {
+    "workerContract": 1,
+    "appContract": 1
+  },
+  "id": "syne/razorpay",
+  "name": "Razorpay",
+  "description": "Settlement records and monthly settlement reconciliation.",
+  "documentation": "https://razorpay.com/docs/api/settlements/",
+  "icon": "payments",
+  "category": "payments",
+  "runtime": {
+    "kind": "rest",
+    "engine": "dlt",
+    "origin": {
+      "host": "api.razorpay.com"
+    },
+    "auth": {
+      "type": "basic",
+      "usernameField": "key_id",
+      "passwordField": "key_secret"
+    }
+  },
+  "limitations": [
+    "Monthly reconciliation is a re-readable snapshot, not a change-data feed.",
+    "Live settlements require an eligible merchant account; test mode does not prove historical coverage.",
+    "Amounts, fees and taxes are integer currency subunits; retain source currency."
+  ]
+}

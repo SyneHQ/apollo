@@ -1,0 +1,124 @@
+{
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "publisher": {
+    "id": "syne",
+    "name": "Syne",
+    "url": "https://synehq.com"
+  },
+  "license": "Apache-2.0",
+  "scopes": [
+    {
+      "id": "read_orders",
+      "required": true,
+      "reason": "Read orders and their financial fields."
+    },
+    {
+      "id": "read_all_orders",
+      "required": false,
+      "reason": "Approved access required for orders older than 60 days."
+    }
+  ],
+  "configuration": [
+    {
+      "key": "store",
+      "label": "Store subdomain",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "format": "hostname_label"
+    },
+    {
+      "key": "access_token",
+      "label": "Admin API access token",
+      "type": "string",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "streams": [
+    {
+      "id": "orders",
+      "label": "Orders",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "updated_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "incremental",
+        "cursorField": "updated_at",
+        "cursorParam": "updated_at",
+        "lookbackSeconds": 604800,
+        "deletionPolicy": "preserve"
+      }
+    }
+  ],
+  "capabilities": {
+    "preview": true,
+    "fullRefresh": true,
+    "incremental": true,
+    "liveQuery": false,
+    "webhooks": false
+  },
+  "destinations": [
+    "postgresql_via_go"
+  ],
+  "limits": {
+    "previewRows": 25,
+    "batchRows": 250,
+    "responseBytes": 2097152,
+    "timeoutSeconds": 30,
+    "retryAttempts": 3,
+    "concurrency": 1
+  },
+  "permissions": {
+    "source": "read",
+    "destination": "write",
+    "localFiles": false
+  },
+  "compatibility": {
+    "workerContract": 1,
+    "appContract": 1
+  },
+  "id": "syne/shopify",
+  "name": "Shopify",
+  "description": "Merchant-authorized orders and refunds through the GraphQL Admin API.",
+  "documentation": "https://shopify.dev/docs/api/admin-graphql",
+  "icon": "store",
+  "category": "commerce",
+  "runtime": {
+    "kind": "reviewed_adapter",
+    "engine": "dlt",
+    "adapter": "shopify_graphql_v1",
+    "origin": {
+      "host": "myshopify.com",
+      "subdomainField": "store"
+    },
+    "auth": {
+      "type": "header",
+      "name": "X-Shopify-Access-Token",
+      "valueField": "access_token"
+    }
+  },
+  "limitations": [
+    "Order history is limited to 60 days unless the merchant app has approved read_all_orders access.",
+    "Access depends on the merchant app's approved scopes and protected customer data permissions.",
+    "Missing records are preserved; hard deletion is not inferred from a page."
+  ]
+}

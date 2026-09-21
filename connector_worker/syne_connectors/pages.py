@@ -59,6 +59,7 @@ def paginator(paging, position):
 
 def rest_pages(manifest, stream, values, checkpoint, budget, *, session_factory=BoundedSession):
     require(manifest["runtime"]["kind"] == "rest", "runtime_unsupported")
+    require(manifest["id"] != "syne/razorpay" or manifest["version"] == "1.0.1", "connector_upgrade_required")
     require(stream["sync"]["mode"] == "snapshot", "incremental_adapter_required")
     values = configuration(manifest, values)
     runtime = manifest["runtime"]; origin = runtime["origin"]

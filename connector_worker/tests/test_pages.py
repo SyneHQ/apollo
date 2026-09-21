@@ -95,12 +95,12 @@ class PageTests(unittest.TestCase):
         with self.assertRaisesRegex(ConnectorError,"destination_receipt_mismatch"): write_pages([empty],bad,bad.state,"run-a",normal,budget())
 
     def test_money_and_source_values_stay_exact(self):
-        m,stream,_=self.fixture();row={"id":"setl-a","amount":123456789012345678,"currency":"INR","created_at":1790020000,"fee":17}
+        m,stream,_=self.fixture();row={"id":"setl-a","amount":123456789012345678,"currency":"INR","created_at":1790020000,"fees":17,"tax":0,"status":"processed"}
         result=normalize_record(m,stream,row)
         self.assertEqual(result["payload"]["fields"]["amount"],"123456789012345678")
         self.assertIs(result["payload"]["source"],row)
         with self.assertRaises(ConnectorError): normalize_record(m,stream,{**row,"amount":1.1})
-        with self.assertRaises(ConnectorError): normalize_record(m,stream,{k:v for k,v in row.items() if k!="currency"})
+        with self.assertRaises(ConnectorError): normalize_record(m,stream,{k:v for k,v in row.items() if k!="created_at"})
 
     def test_python_wire_fixture_matches_go_receipt_hash(self):
         from decimal import Decimal
@@ -113,7 +113,7 @@ class PageTests(unittest.TestCase):
     def test_third_rest_source_executes_through_same_page_and_record_logic(self):
         m,stream,values=self.fixture()
         m["id"]="fixture/ledger";m["publisher"]["id"]="fixture";m["runtime"]["origin"]["host"]="api.example.com"
-        data={"items":[{"id":"ledger-1","amount":"999999999999999999","currency":"USD","created_at":"2026-09-22T00:00:00Z"}]}
+        data={"items":[{"id":"ledger-1","amount":"999999999999999999","currency":"USD","created_at":"2026-09-22T00:00:00Z","fees":"0","tax":"0","status":"processed"}]}
         with patch.object(BoundedSession,"_once",side_effect=[response(data),response({"items":[]})]):
             sink=Sink()
             result=write_pages(rest_pages(m,stream,values,{},budget()),sink,sink.state,"run-third",lambda row:normalize_record(m,stream,row),budget())

@@ -1,6 +1,6 @@
 {
   "manifestVersion": 1,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": {
     "id": "syne",
     "name": "Syne",
@@ -63,12 +63,32 @@
         {
           "key": "currency",
           "type": "string",
-          "nullable": false
+          "nullable": true
         },
         {
           "key": "created_at",
           "type": "timestamp",
           "nullable": false
+        },
+        {
+          "key": "status",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "fees",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "tax",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "utr",
+          "type": "string",
+          "nullable": true
         },
         {
           "key": "payload",
@@ -99,11 +119,17 @@
       "id": "settlement_recon",
       "label": "Settlement reconciliation",
       "primaryKey": [
-        "id"
+        "entity_id",
+        "type"
       ],
       "columns": [
         {
-          "key": "id",
+          "key": "entity_id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "type",
           "type": "string",
           "nullable": false
         },
@@ -120,6 +146,56 @@
         {
           "key": "created_at",
           "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "debit",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "credit",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "fee",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "tax",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "settlement_id",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "key": "payment_id",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "key": "order_id",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "key": "settlement_utr",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "key": "on_hold",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "key": "settled",
+          "type": "boolean",
           "nullable": false
         },
         {
@@ -211,6 +287,7 @@
   "limitations": [
     "Monthly reconciliation is a re-readable snapshot, not a change-data feed.",
     "Live settlements require an eligible merchant account; test mode does not prove historical coverage.",
-    "Amounts, fees and taxes are integer currency subunits; retain source currency."
+    "Amounts, fees and taxes are integer currency subunits; retain source currency.",
+    "Settlement responses do not include a currency code. Preserve it as unknown until explicit currency evidence is available; do not infer INR from the provider name."
   ]
 }

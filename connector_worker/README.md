@@ -41,3 +41,9 @@ Twenty-one Python tests now include real dlt pagination over deterministic respo
 Resume uses a verified file plus row position and the same partial-page hash mechanism. Replacing file contents under the same identifier fails the hash check. The execution binding must include this file hash; a file ID alone is insufficient. Empty reports still produce a terminal checkpoint. XLSX remains explicitly unsupported by this first parser.
 
 Twenty-five Python tests pass, adding CSV precision/provenance, formula preservation, file replacement denial, resume, malformed encoding/header/row handling and empty reports. This is parser acceptance, not yet a live workspace file-download or authenticated ingestion claim.
+
+## Razorpay 1.0.1 conformance
+
+The public examples from `https://razorpay.com/docs/api/settlements/fetch-all/` and `https://razorpay.com/docs/api/settlements/fetch-recon/` were checked on 2026-09-22 and are stored as test fixtures. They establish that settlement currency is absent and reconciliation identity uses `entity_id` plus `type`. The corrected manifest retains unknown settlement currency as null and preserves debit, credit, fees, tax and linking IDs. It does not default a country or currency.
+
+Workers require Razorpay 1.0.1; the app retains the archived configuration contract for reopening only. Twenty-seven Python tests now pass, including the provider's settlement/payment/refund/transfer/adjustment examples. Live merchant credentials, history coverage and financial reconciliation remain unverified.

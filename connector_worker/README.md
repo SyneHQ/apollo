@@ -142,3 +142,23 @@ fixture GraphQL responses and the real request validation/retry code. The fixed
 fields were checked against Shopify's 2026-07 documentation, not a live merchant
 schema. This PR does not enable Shopify dispatch; scope checking, complete parent
 and child pagination, incremental windows and resume acceptance follow separately.
+
+## Shopify pagination and window primitives
+
+`shopify.client` adds a strict dlt body-cursor paginator. It validates pageInfo
+before dlt error formatting, follows empty nonterminal pages, rejects cursor
+loops and null/missing parents, and includes resumed counts in the 25,000-object
+limit. Its scope check rejects insufficient order-history access before extraction.
+
+`shopify.windows` defines durable half-open update windows. A scan pins its upper
+UTC timestamp; completion advances a watermark only after all split windows
+finish. Dense windows split at 20,000 records and replay the smaller window;
+destination content deduplication makes this safe. A still-dense one-second
+window fails explicitly. Incremental runs overlap seven days; full refresh scans
+all selected history. Returned order dates must satisfy the filter, and malformed
+or incompatible checkpoints fail instead of skipping data.
+
+These are adapter primitives, not enabled dispatch. All 48 Python tests passed,
+including real dlt iteration over fixture responses, scope checks, continuation
+counts, window splitting, overlap, full refresh and invalid checkpoints. Nested
+stream mapping and complete worker acceptance remain subsequent increments.

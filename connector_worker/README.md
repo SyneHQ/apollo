@@ -122,3 +122,23 @@ transition deduplication retains 501 current rows and 501 versions with exact
 money. This does not claim live object-storage/KMS or authenticated Next.js-to-
 container acceptance. Earlier validation counts in this document describe the
 corresponding historical increments.
+
+## Shopify read-only GraphQL transport
+
+The reviewed Shopify transport uses dlt's session interface and the same bounded
+public-only HTTPS transport as REST. POST is allowed only on the configured
+merchant's pinned `/admin/api/2026-07/graphql.json` route, with one of six fixed
+read documents. Arbitrary GraphQL, mutations, another shop, extra variables and
+an API-version fall-forward fail closed. Generic REST remains GET-only.
+
+GraphQL errors with partial data are rejected. `THROTTLED` responses share the
+existing retry/deadline budget, using documented query-cost recovery when
+available. Errors contain fixed diagnostic codes, never upstream bodies/tokens.
+No dependency or scheduler has been added; dlt remains the extraction library
+and Apollo remains the orchestrator.
+
+Forty Python tests pass, including the three new transport tests. These use
+fixture GraphQL responses and the real request validation/retry code. The fixed
+fields were checked against Shopify's 2026-07 documentation, not a live merchant
+schema. This PR does not enable Shopify dispatch; scope checking, complete parent
+and child pagination, incremental windows and resume acceptance follow separately.

@@ -82,9 +82,9 @@ class BoundedSession(requests.Session):
             raise ConnectorError("network_denied") from None
         require(u.scheme == "https" and u.hostname == self.host and port in (None, 443)
                 and not u.username and not u.password and not u.fragment, "network_denied")
-        require(request.method == "GET" and not request.body, "method_denied")
+        self.validate_method(request, u)
         require(len(request.url) <= 16384, "request_limit")
-        allowed = {"authorization", "x-api-key", "x-shopify-access-token", "accept", "user-agent"}
+        allowed = self.allowed_headers()
         require(all(k.lower() in allowed for k in request.headers), "header_denied")
         require(all(isinstance(v, str) and "\r" not in v and "\n" not in v for v in request.headers.values()), "header_denied")
         for attempt in range(self.limits["retryAttempts"] + 1):
@@ -100,6 +100,12 @@ class BoundedSession(requests.Session):
             self.budget.wait(max(1, delay))
         raise ConnectorError("source_retry_exhausted")
 
+    def validate_method(self, request, url):
+        require(request.method == "GET" and not request.body, "method_denied")
+
+    def allowed_headers(self):
+        return {"authorization", "x-api-key", "x-shopify-access-token", "accept", "user-agent"}
+
     def _once(self, request, url):
         timeout = min(self.limits["timeoutSeconds"], self.budget.remaining())
         connection = PublicHTTPSConnection(self.host, timeout=timeout, context=self._ssl)
@@ -109,7 +115,7 @@ class BoundedSession(requests.Session):
             target = url.path or "/"
             if url.query:
                 target += "?" + url.query
-            connection.request("GET", target, headers=headers)
+            connection.request(request.method, target, body=request.body, headers=headers)
             raw = connection.getresponse()
             require(raw.getheader("Content-Encoding", "identity") == "identity", "source_encoding_unsupported")
             length = raw.getheader("Content-Length")
@@ -129,7 +135,7 @@ class BoundedSession(requests.Session):
             response.request, response.url = request, request.url
             return response
         except (OSError, http.client.HTTPException):
-            # GET transport failures are resumable from the durable checkpoint;
+            # Read transport failures are resumable from the durable checkpoint;
             # provider URLs, headers and bodies never become public exceptions.
             raise ConnectorError("source_transport_failed") from None
         finally:

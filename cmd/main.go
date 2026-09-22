@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	config "github.com/SyneHQ/apollo"
+	"github.com/SyneHQ/apollo/connectorjobs"
 	"github.com/SyneHQ/apollo/keys"
 	"github.com/SyneHQ/apollo/proto"
 	"github.com/SyneHQ/apollo/runner"
@@ -19,6 +20,8 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	log.Println("Starting Dramatic Jobs")
 
@@ -71,6 +74,23 @@ func main() {
 	js := jobsserver.NewJobsServer(r, config)
 	js.SetAuthority(authority)
 	js.Reload(context.Background())
+	connectorDone := make(chan struct{})
+	if os.Getenv("APOLLO_CONNECTORS_ENABLED") == "true" {
+		if config.JobsProvider != "local" {
+			log.Fatal("connector dispatch currently requires JOBS_PROVIDER=local")
+		}
+		supervisor, err := connectorjobs.NewSupervisor(connectorjobs.Store{DB: metadataDB}, r, connectorjobs.Options{
+			Image: os.Getenv("APOLLO_CONNECTOR_IMAGE"), SigningKey: os.Getenv("APOLLO_JOB_SIGNING_KEY"),
+			BootstrapOrigin: os.Getenv("CONNECTOR_BOOTSTRAP_ORIGIN"), BridgeOrigin: os.Getenv("CONNECTOR_BRIDGE_ORIGIN"),
+			ServiceCA: os.Getenv("CONNECTOR_SERVICE_CA_PEM"),
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() { defer close(connectorDone); supervisor.Run(ctx) }()
+	} else {
+		close(connectorDone)
+	}
 	proto.RegisterJobsServiceServer(grpcServer, js)
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -80,17 +100,8 @@ func main() {
 
 	log.Printf("Server starting on port %s", config.Port)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		log.Println("Shutting down server...")
-		grpcServer.GracefulStop()
-		os.Exit(0)
-	}()
-
-	// Wait for interrupt signal to gracefully shutdown the server
-	<-c
+	<-ctx.Done()
 	log.Println("Shutting down server...")
 	grpcServer.GracefulStop()
+	<-connectorDone
 }

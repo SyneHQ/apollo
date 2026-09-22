@@ -13,6 +13,14 @@ func TestFlowrCannotReceivePlatformSecrets(t *testing.T) {
 		t.Fatalf("incorrect secret policy")
 	}
 }
+
+func TestConnectorWorkersReceiveOnlyExplicitScopedEnvironment(t *testing.T) {
+	r := &LocalRunner{Secrets: []models.Secret{{SecretKey: "DATABASE_URL", SecretValue: "database-canary"}, {SecretKey: "KMS_API_URL", SecretValue: "kms-canary"}, {SecretKey: "FLOWR_API_URL", SecretValue: "flowr-canary"}}}
+	env := strings.Join(r.buildEnvVars(JobRequest{Name: "connector-sync-run", Overrides: &JobOverrides{Env: []EnvVar{{Name: "CONNECTOR_INGESTION_TOKEN", Value: "scoped-token"}}}}), "\n")
+	if env != "CONNECTOR_INGESTION_TOKEN=scoped-token" {
+		t.Fatal("connector received platform secrets")
+	}
+}
 func TestResourcesBoundedAndContainerNamesScoped(t *testing.T) {
 	l := &LocalRunner{}
 	if _, err := l.buildResourceLimits(JobRequest{Resources: Resources{CPU: "100", Memory: "500Gi"}}); err == nil {

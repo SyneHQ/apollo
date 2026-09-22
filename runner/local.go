@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/containerd/errdefs"
 	"github.com/infisical/go-sdk/packages/models"
@@ -63,6 +65,11 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 		CapDrop:     []string{"ALL"},
 		SecurityOpt: []string{"no-new-privileges:true"},
 	}
+	if strings.HasPrefix(req.Name, "connector-sync-") {
+		containerCfg.User = "10001:10001"
+		hostCfg.ReadonlyRootfs = true
+		hostCfg.Tmpfs = map[string]string{"/tmp": "rw,noexec,nosuid,size=64m"}
+	}
 
 	created, err := cli.ContainerCreate(ctx, client.ContainerCreateOptions{Config: containerCfg, HostConfig: hostCfg, Name: containerName(req.Name)})
 	if err != nil {
@@ -70,7 +77,9 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	}
 
 	defer func() {
-		_, _ = cli.ContainerRemove(context.Background(), created.ID, client.ContainerRemoveOptions{
+		cleanup, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = cli.ContainerRemove(cleanup, created.ID, client.ContainerRemoveOptions{
 			Force:         true,
 			RemoveVolumes: true,
 		})
@@ -91,7 +100,11 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	case waitStatus = <-wait.Result:
 	}
 
-	logs, err := l.readContainerLogs(ctx, cli, created.ID)
+	maxLogs := int64(0)
+	if strings.HasPrefix(req.Name, "connector-sync-") {
+		maxLogs = 64 << 10
+	}
+	logs, err := l.readContainerLogs(ctx, cli, created.ID, maxLogs)
 	if err != nil {
 		return "", fmt.Errorf("failed to read container logs: %w", err)
 	}
@@ -241,7 +254,7 @@ func (l *LocalRunner) UpdateSchedule(ctx context.Context, name string, spec stri
 	return nil
 }
 
-func (l *LocalRunner) readContainerLogs(ctx context.Context, cli *client.Client, id string) (string, error) {
+func (l *LocalRunner) readContainerLogs(ctx context.Context, cli *client.Client, id string, maxBytes int64) (string, error) {
 	reader, err := cli.ContainerLogs(ctx, id, client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -255,7 +268,11 @@ func (l *LocalRunner) readContainerLogs(ctx context.Context, cli *client.Client,
 	defer reader.Close()
 
 	var buf bytes.Buffer
-	if _, err := stdcopy.StdCopy(&buf, &buf, reader); err != nil {
+	var input io.Reader = reader
+	if maxBytes > 0 {
+		input = io.LimitReader(reader, maxBytes)
+	}
+	if _, err := stdcopy.StdCopy(&buf, &buf, input); err != nil {
 		return "", err
 	}
 

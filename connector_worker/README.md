@@ -189,3 +189,20 @@ changed-parent rejection, window replay, corrections, cancellation and identical
 lost-ack retries. These are synthetic merchant responses over actual dlt and the
 shared handoff, not live Shopify or Go/PostgreSQL acceptance for this adapter.
 Worker dispatch remains disabled until the following integration increment.
+
+## Shopify worker integration and TLS acceptance
+
+The worker entrypoint now admits only the reviewed Shopify 1.1.0 adapter in
+addition to REST and CSV. Other executable adapters and old Shopify contracts
+still fail before opening a destination. Existing expiry, scoped bootstrap,
+manifest digest, cancellation and final durable-state checks remain in force.
+No production flag or worker image reference has been changed.
+
+All 57 Python tests pass. The companion Go `TestShopifyWorkerThroughTLSBridge`
+executes `tests/shopify_acceptance.py` through verified TLS and actual PostgreSQL.
+An interrupted 55-line-item import resumes from child cursor 25, a lost batch
+acknowledgement retries identically, a full rescan adds no unchanged history, and
+one correction produces exactly one extra version: 55 current rows, 56 versions,
+sequence 9. The exact amount `9999999999999.123456` survives. Merchant and bootstrap
+responses remain fixtures; live Shopify, real KMS and authenticated app-to-container
+acceptance are still unverified. A fresh immutable worker image is required.

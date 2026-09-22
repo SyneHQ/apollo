@@ -17,6 +17,8 @@ from .manifest import ConnectorError, canonical, configuration, require, validat
 from .pages import rest_pages
 from .csv_source import csv_pages
 from .records import normalize_record
+from .shopify.adapter import shopify_pages
+from .shopify.records import normalize_shopify
 from .transport import Budget
 
 
@@ -59,7 +61,9 @@ def run_worker(env, cancelled):
     bootstrap.budget = budget
     manifest = validate_manifest(canonical(data["manifest"]), data["manifest_digest"])
     kind = manifest["runtime"]["kind"]
-    require(kind in {"rest", "file"}, "runtime_unsupported")
+    shopify = (kind == "reviewed_adapter" and manifest["id"] == "syne/shopify"
+               and manifest["version"] == "1.1.0" and manifest["runtime"]["adapter"] == "shopify_graphql_v1")
+    require(kind in {"rest", "file"} or shopify, "runtime_unsupported")
     if kind == "file":
         require(isinstance(data.get("file_hash"), str) and re.fullmatch(r"[a-f0-9]{64}", data["file_hash"]), "file_hash_required")
     else:
@@ -67,7 +71,7 @@ def run_worker(env, cancelled):
     streams = [stream for stream in manifest["streams"] if stream["id"] == data["stream_id"]]
     require(len(streams) == 1, "worker_stream_invalid")
     stream = streams[0]
-    require(stream["sync"]["mode"] == "snapshot", "incremental_adapter_required")
+    require(shopify or stream["sync"]["mode"] == "snapshot", "incremental_adapter_required")
     require(manifest["id"] != "syne/razorpay" or manifest["version"] == "1.0.1", "connector_upgrade_required")
     values = configuration(manifest, data["configuration"])
     sink = BridgeSink(env.get("CONNECTOR_BRIDGE_ORIGIN"), env.get("CONNECTOR_INGESTION_TOKEN"), budget, tls_context=context)
@@ -77,11 +81,14 @@ def run_worker(env, cancelled):
         if kind == "file":
             source = stack.enter_context(bootstrap.file())
             pages = csv_pages(manifest, values, source, data["file_hash"], state["checkpoint"], budget)
+        elif shopify:
+            pages = shopify_pages(manifest, stream, values, state["checkpoint"], budget)
         else:
             pages = rest_pages(manifest, stream, values, state["checkpoint"], budget)
         if hasattr(pages, "close"):
             stack.callback(pages.close)
-        result = write_pages(pages, sink, state, run_id, lambda row: normalize_record(manifest, stream, row), budget)
+        normalize = normalize_shopify if shopify else normalize_record
+        result = write_pages(pages, sink, state, run_id, lambda row: normalize(manifest, stream, row), budget)
     final = retry_control(sink.state, budget)
     require(final["sequence"] == result["sequence"] and final["checkpoint"].get("done") is True,
             "destination_not_complete")

@@ -108,3 +108,21 @@ class WorkerTests(unittest.TestCase):
                 bootstrap.return_value.file.side_effect=source
                 with self.assertRaises(ConnectorError):run_worker(env,threading.Event())
             self.assertEqual(sink.inner.rows,{})
+
+    def test_reviewed_shopify_worker_uses_nested_adapter_and_rejects_other_adapters(self):
+        from test_shopify_adapter import MANIFEST, Merchant, VALUES
+        from syne_connectors.transport import BoundedSession
+        env, data, _ = self.fixture()
+        data.update(manifest=MANIFEST, manifest_digest=content_digest(MANIFEST), stream_id="line_items", configuration=VALUES)
+        merchant = Merchant(); sink = Destination()
+        def source(_session, request, url): return merchant.send(request, url)
+        with patch("syne_connectors.worker.BootstrapClient") as bootstrap, patch("syne_connectors.worker.BridgeSink", return_value=sink), patch.object(BoundedSession, "_once", source):
+            bootstrap.return_value.fetch.return_value = data
+            result = run_worker(env, threading.Event())
+        self.assertEqual(result["records_committed"], 55); self.assertTrue(result["done"])
+        for changes in [{"version": "1.0.0"}, {"id": "syne/unreviewed"}]:
+            bad = deepcopy(data); bad["manifest"].update(changes); bad["manifest_digest"] = content_digest(bad["manifest"])
+            with patch("syne_connectors.worker.BootstrapClient") as bootstrap, patch("syne_connectors.worker.BridgeSink") as destination:
+                bootstrap.return_value.fetch.return_value = bad
+                with self.assertRaises(ConnectorError): run_worker(env, threading.Event())
+                destination.assert_not_called()

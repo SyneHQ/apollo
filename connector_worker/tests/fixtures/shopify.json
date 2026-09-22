@@ -1,0 +1,423 @@
+{
+  "manifestVersion": 1,
+  "version": "1.1.0",
+  "publisher": {
+    "id": "syne",
+    "name": "Syne",
+    "url": "https://synehq.com"
+  },
+  "license": "Apache-2.0",
+  "scopes": [
+    {
+      "id": "read_orders",
+      "required": true,
+      "reason": "Read orders and their financial fields."
+    },
+    {
+      "id": "read_all_orders",
+      "required": false,
+      "reason": "Approved access required for orders older than 60 days."
+    }
+  ],
+  "configuration": [
+    {
+      "key": "store",
+      "label": "Store subdomain",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "format": "hostname_label"
+    },
+    {
+      "key": "access_token",
+      "label": "Admin API access token",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "key": "start_date",
+      "label": "Order history starts on",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "format": "date",
+      "description": "UTC date. Earlier than 60 days requires approved read_all_orders access."
+    },
+    {
+      "key": "sync_mode",
+      "label": "Synchronization mode",
+      "type": "enum",
+      "required": true,
+      "secret": false,
+      "default": "incremental",
+      "options": [
+        {
+          "value": "incremental",
+          "label": "Incremental with seven-day overlap"
+        },
+        {
+          "value": "full_refresh",
+          "label": "Rescan all selected order history"
+        }
+      ]
+    }
+  ],
+  "streams": [
+    {
+      "id": "orders",
+      "label": "Orders",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "created_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "updated_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "processed_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "key": "cancelled_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "key": "financial_status",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "presentment_currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "original_total",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "current_total",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "current_subtotal",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "current_tax",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "current_discounts",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "total_received",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "total_refunded",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "net_payment",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "incremental",
+        "cursorField": "updated_at",
+        "cursorParam": "updated_at",
+        "lookbackSeconds": 604800,
+        "deletionPolicy": "preserve"
+      }
+    },
+    {
+      "id": "line_items",
+      "label": "Order line items",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "order_id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "updated_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "sku",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "key": "title",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "quantity",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "current_quantity",
+          "type": "integer_string",
+          "nullable": false
+        },
+        {
+          "key": "original_unit_amount",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "discounted_total",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "incremental",
+        "cursorField": "updated_at",
+        "cursorParam": "updated_at",
+        "lookbackSeconds": 604800,
+        "deletionPolicy": "preserve"
+      }
+    },
+    {
+      "id": "refunds",
+      "label": "Refund records",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "order_id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "created_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "updated_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "recorded_amount",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "incremental",
+        "cursorField": "updated_at",
+        "cursorParam": "updated_at",
+        "lookbackSeconds": 604800,
+        "deletionPolicy": "preserve"
+      }
+    },
+    {
+      "id": "refund_transactions",
+      "label": "Refund transactions",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "order_id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "refund_id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "created_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "updated_at",
+          "type": "timestamp",
+          "nullable": false
+        },
+        {
+          "key": "processed_at",
+          "type": "timestamp",
+          "nullable": true
+        },
+        {
+          "key": "kind",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "status",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "gateway",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "amount",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "incremental",
+        "cursorField": "updated_at",
+        "cursorParam": "updated_at",
+        "lookbackSeconds": 604800,
+        "deletionPolicy": "preserve"
+      }
+    }
+  ],
+  "capabilities": {
+    "preview": true,
+    "fullRefresh": true,
+    "incremental": true,
+    "liveQuery": false,
+    "webhooks": false
+  },
+  "destinations": [
+    "postgresql_via_go"
+  ],
+  "limits": {
+    "previewRows": 25,
+    "batchRows": 250,
+    "responseBytes": 2097152,
+    "timeoutSeconds": 30,
+    "retryAttempts": 3,
+    "concurrency": 1
+  },
+  "permissions": {
+    "source": "read",
+    "destination": "write",
+    "localFiles": false
+  },
+  "compatibility": {
+    "workerContract": 1,
+    "appContract": 1
+  },
+  "id": "syne/shopify",
+  "name": "Shopify",
+  "description": "Orders, line items, refund records and refund transactions through the GraphQL Admin API.",
+  "documentation": "https://shopify.dev/docs/api/admin-graphql",
+  "icon": "store",
+  "category": "commerce",
+  "runtime": {
+    "kind": "reviewed_adapter",
+    "engine": "dlt",
+    "adapter": "shopify_graphql_v1",
+    "origin": {
+      "host": "myshopify.com",
+      "subdomainField": "store"
+    },
+    "auth": {
+      "type": "header",
+      "name": "X-Shopify-Access-Token",
+      "valueField": "access_token"
+    }
+  },
+  "limitations": [
+    "Requires read_orders; history older than 60 days additionally requires approved read_all_orders access.",
+    "GraphQL Admin API 2026-07 is pinned. Customer contact, address and payment instrument details are not requested.",
+    "Order history is selected by created_at from the UTC start date. Incremental scans follow order updated_at with a seven-day overlap; use full refresh to recheck older unchanged parent timestamps.",
+    "Refund records do not prove money was returned. Refund transaction kind and status must be considered separately.",
+    "Shop and presentment money values remain separate in raw payloads. Typed monetary columns use shop currency without foreign exchange conversion.",
+    "Line-item and refund-transaction pages are persisted separately. An order refund array is never deliberately truncated; responses exceeding the worker byte limit fail explicitly.",
+    "Missing records are preserved. Hard deletion is not inferred from a scan."
+  ]
+}

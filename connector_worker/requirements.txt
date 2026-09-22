@@ -1,0 +1,4 @@
+dlt==1.30.0
+jsonschema==4.26.0
+requests==2.34.2
+simplejson==4.1.2

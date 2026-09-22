@@ -1,0 +1,1 @@
+{"id":"cross-language","run_id":"run-a","expected_sequence":0,"observed_at":"2026-09-22T00:00:00Z","records":[{"id":"source-a","payload":{"amount":123456789012345678.10,"text":"\u003c\u003e\u0026\u2028\u2029 café"},"deleted":false}],"checkpoint":{"position":"opaque-token","done":false}}

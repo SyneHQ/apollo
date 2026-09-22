@@ -1,0 +1,1065 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "manifestVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 100,
+      "pattern": "^[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "publisher": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048,
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9.+-]+$"
+    },
+    "documentation": {
+      "type": "string",
+      "maxLength": 2048,
+      "format": "uri"
+    },
+    "icon": {
+      "type": "string",
+      "enum": [
+        "store",
+        "payments",
+        "file",
+        "database"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "commerce",
+        "payments",
+        "accounting",
+        "marketing",
+        "file",
+        "database"
+      ]
+    },
+    "runtime": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rest"
+            },
+            "engine": {
+              "type": "string",
+              "const": "dlt"
+            },
+            "origin": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string",
+                  "maxLength": 253,
+                  "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+                },
+                "subdomainField": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              },
+              "required": [
+                "host"
+              ],
+              "additionalProperties": false
+            },
+            "auth": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "none"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "bearer"
+                    },
+                    "tokenField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "tokenField"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "basic"
+                    },
+                    "usernameField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "passwordField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "usernameField",
+                    "passwordField"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "header"
+                    },
+                    "name": {
+                      "type": "string",
+                      "enum": [
+                        "X-Shopify-Access-Token",
+                        "X-Api-Key"
+                      ]
+                    },
+                    "valueField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "name",
+                    "valueField"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "engine",
+            "origin",
+            "auth"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "reviewed_adapter"
+            },
+            "engine": {
+              "type": "string",
+              "const": "dlt"
+            },
+            "adapter": {
+              "type": "string",
+              "const": "shopify_graphql_v1"
+            },
+            "origin": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string",
+                  "maxLength": 253,
+                  "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+                },
+                "subdomainField": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              },
+              "required": [
+                "host"
+              ],
+              "additionalProperties": false
+            },
+            "auth": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "none"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "bearer"
+                    },
+                    "tokenField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "tokenField"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "basic"
+                    },
+                    "usernameField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "passwordField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "usernameField",
+                    "passwordField"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "header"
+                    },
+                    "name": {
+                      "type": "string",
+                      "enum": [
+                        "X-Shopify-Access-Token",
+                        "X-Api-Key"
+                      ]
+                    },
+                    "valueField": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "name",
+                    "valueField"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "engine",
+            "adapter",
+            "origin",
+            "auth"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "file"
+            },
+            "formats": {
+              "minItems": 1,
+              "maxItems": 2,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "csv",
+                  "xlsx"
+                ]
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "formats"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "configuration": {
+      "maxItems": 40,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "boolean",
+              "enum"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "text",
+              "hostname_label",
+              "date",
+              "timezone"
+            ]
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "minimum": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maximum": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "options": {
+            "minItems": 1,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "value",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type",
+          "required",
+          "secret"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "scopes": {
+      "maxItems": 30,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "id",
+          "required",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "streams": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "primaryKey": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          },
+          "columns": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "string",
+                    "integer_string",
+                    "decimal_string",
+                    "boolean",
+                    "timestamp",
+                    "json"
+                  ]
+                },
+                "nullable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "type",
+                "nullable"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sync": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "snapshot"
+                  },
+                  "deletionPolicy": {
+                    "type": "string",
+                    "const": "preserve"
+                  }
+                },
+                "required": [
+                  "mode",
+                  "deletionPolicy"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "incremental"
+                  },
+                  "cursorField": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  },
+                  "cursorParam": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  },
+                  "lookbackSeconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2678400
+                  },
+                  "deletionPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "preserve",
+                      "explicit_tombstone"
+                    ]
+                  },
+                  "tombstoneField": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[a-z][a-z0-9_]*$"
+                  }
+                },
+                "required": [
+                  "mode",
+                  "cursorField",
+                  "cursorParam",
+                  "lookbackSeconds",
+                  "deletionPolicy"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "request": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^\\/(?:[a-zA-Z0-9_-]+\\/)*[a-zA-Z0-9_.-]*$"
+              },
+              "method": {
+                "type": "string",
+                "const": "GET"
+              },
+              "recordsPath": {
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              },
+              "parameters": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string",
+                              "const": "config"
+                            },
+                            "field": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 64,
+                              "pattern": "^[a-z][a-z0-9_]*$"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "field"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string",
+                              "const": "literal"
+                            },
+                            "value": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "maxLength": 4096
+                                },
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "pagination": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "single"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "offset"
+                      },
+                      "limitParam": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "offsetParam": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "pageSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 250
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "limitParam",
+                      "offsetParam",
+                      "pageSize"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "page"
+                      },
+                      "limitParam": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "pageParam": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "pageSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 250
+                      },
+                      "firstPage": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "limitParam",
+                      "pageParam",
+                      "pageSize",
+                      "firstPage"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "cursor"
+                      },
+                      "cursorParam": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "nextCursorPath": {
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64,
+                          "pattern": "^[a-z][a-z0-9_]*$"
+                        }
+                      },
+                      "limitParam": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "pageSize": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 250
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "cursorParam",
+                      "nextCursorPath",
+                      "limitParam",
+                      "pageSize"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "required": [
+              "path",
+              "method",
+              "recordsPath",
+              "parameters",
+              "pagination"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "primaryKey",
+          "columns",
+          "sync"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "preview": {
+          "type": "boolean"
+        },
+        "fullRefresh": {
+          "type": "boolean"
+        },
+        "incremental": {
+          "type": "boolean"
+        },
+        "liveQuery": {
+          "type": "boolean",
+          "const": false
+        },
+        "webhooks": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "preview",
+        "fullRefresh",
+        "incremental",
+        "liveQuery",
+        "webhooks"
+      ],
+      "additionalProperties": false
+    },
+    "destinations": {
+      "minItems": 1,
+      "maxItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "const": "postgresql_via_go"
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "previewRows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "batchRows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "responseBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 8388608
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "retryAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      },
+      "required": [
+        "previewRows",
+        "batchRows",
+        "responseBytes",
+        "timeoutSeconds",
+        "retryAttempts",
+        "concurrency"
+      ],
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "read"
+        },
+        "destination": {
+          "type": "string",
+          "const": "write"
+        },
+        "localFiles": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "destination",
+        "localFiles"
+      ],
+      "additionalProperties": false
+    },
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "workerContract": {
+          "type": "number",
+          "const": 1
+        },
+        "appContract": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "workerContract",
+        "appContract"
+      ],
+      "additionalProperties": false
+    },
+    "limitations": {
+      "minItems": 1,
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    }
+  },
+  "required": [
+    "manifestVersion",
+    "id",
+    "version",
+    "name",
+    "description",
+    "publisher",
+    "license",
+    "documentation",
+    "icon",
+    "category",
+    "runtime",
+    "configuration",
+    "scopes",
+    "streams",
+    "capabilities",
+    "destinations",
+    "limits",
+    "permissions",
+    "compatibility",
+    "limitations"
+  ],
+  "additionalProperties": false
+}

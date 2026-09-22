@@ -1,0 +1,136 @@
+{
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "publisher": {
+    "id": "syne",
+    "name": "Syne",
+    "url": "https://synehq.com"
+  },
+  "license": "Apache-2.0",
+  "scopes": [],
+  "configuration": [
+    {
+      "key": "file_id",
+      "label": "Report file",
+      "type": "string",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "source_name",
+      "label": "Merchant or channel",
+      "type": "string",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "timezone",
+      "label": "Source timezone",
+      "type": "string",
+      "required": true,
+      "secret": false,
+      "format": "timezone",
+      "description": "Use an IANA timezone, such as Asia/Kolkata or Europe/London."
+    },
+    {
+      "key": "id_column",
+      "label": "Source record ID column",
+      "type": "string",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "amount_column",
+      "label": "Amount column",
+      "type": "string",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "currency_column",
+      "label": "Currency column",
+      "type": "string",
+      "required": true,
+      "secret": false
+    }
+  ],
+  "streams": [
+    {
+      "id": "report_rows",
+      "label": "Report rows",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": [
+        {
+          "key": "id",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "amount",
+          "type": "decimal_string",
+          "nullable": false
+        },
+        {
+          "key": "currency",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "key": "payload",
+          "type": "json",
+          "nullable": false
+        }
+      ],
+      "sync": {
+        "mode": "snapshot",
+        "deletionPolicy": "preserve"
+      }
+    }
+  ],
+  "capabilities": {
+    "preview": true,
+    "fullRefresh": true,
+    "incremental": false,
+    "liveQuery": false,
+    "webhooks": false
+  },
+  "destinations": [
+    "postgresql_via_go"
+  ],
+  "limits": {
+    "previewRows": 25,
+    "batchRows": 250,
+    "responseBytes": 2097152,
+    "timeoutSeconds": 30,
+    "retryAttempts": 3,
+    "concurrency": 1
+  },
+  "permissions": {
+    "source": "read",
+    "destination": "write",
+    "localFiles": true
+  },
+  "compatibility": {
+    "workerContract": 1,
+    "appContract": 1
+  },
+  "id": "syne/merchant-report",
+  "name": "Merchant report import",
+  "description": "Import an authorized merchant report with an explicit column mapping.",
+  "documentation": "https://synehq.com",
+  "icon": "file",
+  "category": "file",
+  "runtime": {
+    "kind": "file",
+    "formats": [
+      "csv"
+    ]
+  },
+  "limitations": [
+    "Uploaded snapshot only; this is not a live merchant integration.",
+    "Mapping and file hash identify the import; corrected files preserve the original raw records.",
+    "CSV is the first supported format; XLSX requires a separately validated parser."
+  ]
+}

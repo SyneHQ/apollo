@@ -15,6 +15,9 @@ func jobSecrets(req JobRequest, secrets []models.Secret) []models.Secret {
 	if strings.HasPrefix(req.Name, "flowr-pipeline-") {
 		allowed = map[string]bool{"FLOWR_API_URL": true}
 	}
+	if strings.HasPrefix(req.Name, "connector-sync-") {
+		allowed = map[string]bool{}
+	}
 	out := []models.Secret{}
 	for _, secret := range secrets {
 		if allowed[secret.SecretKey] {

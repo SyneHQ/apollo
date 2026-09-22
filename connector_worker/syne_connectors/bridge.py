@@ -8,6 +8,7 @@ from .manifest import ConnectorError, parse_json, require
 from .pages import source_bytes
 
 MAX_RESPONSE_BYTES = 32 << 10
+MAX_BOOTSTRAP_BYTES = 512 << 10
 
 
 class BridgeSink:
@@ -55,11 +56,14 @@ class BridgeSink:
         return result
 
     def _call(self, operation, body):
-        require(operation in {"install", "state", "commit"}, "bridge_operation_invalid")
+        paths = {name: "/api/v1/ingestion/" + name for name in ("install", "state", "commit")}
+        paths["bootstrap"] = "/api/internal/connectors/bootstrap"
+        require(operation in paths, "bridge_operation_invalid")
+        limit = MAX_BOOTSTRAP_BYTES if operation == "bootstrap" else MAX_RESPONSE_BYTES
         connection = http.client.HTTPSConnection(self._host, self._port,
             timeout=min(10, self.budget.remaining()), context=self._context)
         try:
-            connection.request("POST", "/api/v1/ingestion/" + operation, body=body,
+            connection.request("POST", paths[operation], body=body,
                 headers={"X-Job-Token": self._token, "Content-Type": "application/json",
                          "Accept": "application/json", "Accept-Encoding": "identity"})
             raw = connection.getresponse()
@@ -77,18 +81,18 @@ class BridgeSink:
             require(raw.status == 200, "destination_http_failed")
             require(raw.getheader("Content-Encoding", "identity") == "identity", "destination_response_invalid")
             length = raw.getheader("Content-Length")
-            require(length is None or (length.isdigit() and int(length) <= MAX_RESPONSE_BYTES), "destination_response_limit")
+            require(length is None or (length.isdigit() and int(length) <= limit), "destination_response_limit")
             data = bytearray()
             while True:
                 self.budget.remaining()
                 if connection.sock is not None:
                     connection.sock.settimeout(min(10, self.budget.remaining()))
-                chunk = raw.read1(min(8192, MAX_RESPONSE_BYTES + 1 - len(data)))
+                chunk = raw.read1(min(8192, limit + 1 - len(data)))
                 if not chunk:
                     break
                 data.extend(chunk)
-                require(len(data) <= MAX_RESPONSE_BYTES, "destination_response_limit")
-            result = parse_json(bytes(data), MAX_RESPONSE_BYTES)
+                require(len(data) <= limit, "destination_response_limit")
+            result = parse_json(bytes(data), limit)
             require(isinstance(result, dict), "destination_response_invalid")
             return result
         except ssl.SSLError:
@@ -99,3 +103,8 @@ class BridgeSink:
             raise ConnectionError("destination_ack_unknown") from None
         finally:
             connection.close()
+
+
+class BootstrapClient(BridgeSink):
+    def fetch(self):
+        return self._call("bootstrap", b"{}")

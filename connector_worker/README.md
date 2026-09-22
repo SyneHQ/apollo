@@ -70,3 +70,28 @@ without duplicate records or versions, preserving a large exact monetary value.
 The bootstrap is passed over stdin; the local test CA is explicitly trusted.
 This establishes local cross-process persistence and authorization, not live
 merchant access, KMS credential resolution, Apollo dispatch or deployment.
+
+## Executable REST worker
+
+`syne-connector-worker` (or `python -m syne_connectors.worker`) runs one leased
+snapshot. It retrieves the pinned configuration, validates run/digest/stream and
+expiry, initializes the approved destination, resumes its durable checkpoint,
+extracts bounded pages and checks the final destination state before emitting a
+small terminal JSON result. An incomplete checkpoint cannot produce success.
+SIGINT/SIGTERM sets the shared cancellation flag; network reads remain bounded by
+their socket deadlines. Error output is a fixed code without tracebacks/secrets.
+
+The operator supplies `CONNECTOR_RUN_ID`, `CONNECTOR_DEADLINE_EPOCH`,
+`CONNECTOR_BOOTSTRAP_ORIGIN`, `CONNECTOR_BOOTSTRAP_TOKEN`,
+`CONNECTOR_BRIDGE_ORIGIN` and `CONNECTOR_INGESTION_TOKEN`. Bootstrap and ingestion
+use separate JWT audiences. Optional `CONNECTOR_SERVICE_CA_PEM` trusts the
+operator's private service ingress CA in memory while preserving hostname and
+certificate verification. It does not alter source-provider TLS trust.
+
+The Dockerfile pins the Python 3.12 base by digest, installs the complete version
+lock and runs as UID/GID 10001. It was built locally for Linux ARM64 and all 35
+tests passed inside it with no network, a read-only root filesystem, 64 MiB tmpfs,
+all capabilities dropped, no-new-privileges, 512 MiB memory, one CPU and a PID
+limit. The image is approximately 202 MB. Unit fixtures do not establish a
+merchant sync. The image has not been published; Apollo's supervisor wiring and
+authenticated app-to-container acceptance are still subsequent work.

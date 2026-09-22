@@ -1,0 +1,7 @@
+*
+!requirements.lock
+!pyproject.toml
+!syne_connectors
+!syne_connectors/**
+**/__pycache__
+**/*.pyc

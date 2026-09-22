@@ -56,18 +56,42 @@ multi-run merchant snapshot.
 
 ## Separate immutable image
 
-Use an explicitly supplied, already installed base worker image ID. No default
-base, package installation or production-image modification is provided. After
-checking `docker image inspect` for that exact ID, build from `connector_worker`:
+Use an explicitly supplied, already installed base worker image ID with a
+pre-existing persistent local tag. Build from `connector_worker` with installed
+Python and Docker; the helper installs nothing:
 
 ```sh
-docker build --pull=false --network=none \
-  --build-arg BASE_WORKER_IMAGE=sha256:REPLACE_WITH_LOCAL_WORKER_IMAGE_ID \
-  -f tests/shopify_fixture/Dockerfile -t syne-shopify-refund-fixture:local .
+python tests/shopify_fixture/build_image.py \
+  --base-image sha256:REPLACE_WITH_LOCAL_WORKER_IMAGE_ID \
+  --evidence-file /absolute/private-task/new-build-evidence.json
 ```
 
-Pass the resulting local immutable image ID to the harness/Apollo, not the tag.
-The image inherits the production non-root user and installs no dependencies.
+A raw Docker image ID cannot be used as a `FROM` name: BuildKit interprets
+`sha256:...` as a registry image reference. The helper inspects the supplied ID,
+creates a unique task-only local alias, and explicitly selects the legacy Docker
+builder (`DOCKER_BUILDKIT=0`) against the selected local Unix-socket engine. If
+that builder is unavailable, it fails without trying BuildKit, pulling images,
+or downloading a Dockerfile frontend. The base must not contain `ONBUILD`
+instructions. Its existing tag ensures cleanup cannot remove its last image
+reference, including after a failed build.
+
+`--pull=false` plus the inspected local alias and legacy builder avoid registry
+resolution. `--network=none` restricts `RUN` networking only; it does **not** make
+BuildKit metadata resolution offline. This fixture's reviewed Dockerfile has no
+`RUN`, `ADD`, package installation, or remote frontend. The helper rejects changes
+to that instruction contract until explicitly reviewed. Its temporary build
+context contains only the Dockerfile and five fixture Python files, excluding
+repository configuration, credentials, caches and build logs.
+
+After building, the helper verifies the base identity again, the exact base
+layer prefix, platform, inherited non-root user and runtime configuration, and
+only the intended fixture labels/PYTHONPATH change. It then removes only its own
+base alias, preserves the installed base, and prints the resulting immutable
+fixture ID and evidence. If another process removes all original base tags, it
+fails and retains its alias rather than risking deletion of the base. It never
+removes the resulting fixture image or another process's tag.
+
+Pass the resulting local immutable image ID to the harness/Apollo, not a tag.
 Apollo continues to invoke `python -m syne_connectors.worker`; its existing
 read-only root, tmpfs, CPU/memory/PID and capability restrictions still apply.
 Never publish or deploy this image as a normal connector worker.
@@ -124,5 +148,6 @@ reconciliation. Those require a completed host acceptance run with this image.
 
 The complete 70-test worker suite passed using the existing local worker image,
 network disabled, a read-only source mount/root filesystem and bounded tmpfs,
-CPU, memory and PIDs. The fixture image itself was not built or started during
-this increment; gateway and database acceptance remain pending.
+CPU, memory and PIDs. The fixture image was subsequently built and smoke-tested locally using the
+offline helper; see `BUILD_VALIDATION.md` for the exact immutable IDs and scope.
+Gateway and database acceptance are separate from this image validation.

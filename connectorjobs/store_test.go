@@ -180,3 +180,53 @@ func TestExpiryNeverReplaysAndCancellationWins(t *testing.T) {
 		t.Fatal("unreviewed failure code accepted")
 	}
 }
+
+func TestFileAccessRequiredForClaimActivityAndCompletion(t *testing.T) {
+	s, id, user, source := fixture(t)
+	var team, tenant string
+	if err := s.DB.QueryRow(`SELECT r."teamId",c."tenantId" FROM connector_sync_runs r JOIN postgoose_connections c ON c.id=r."destinationConnectionId" WHERE r.id=$1`, id).Scan(&team, &tenant); err != nil {
+		t.Fatal(err)
+	}
+	file, storage := uuid.NewString(), uuid.NewString()
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := s.DB.Exec(q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`INSERT INTO postgoose_storage_destinations(id,name,bucket,region,"accessKey","secretKey","teamId","tenantId","updatedAt") VALUES($1,'fixture','fixture','fixture','opaque','opaque',$2,$3,now())`, storage, team, tenant)
+	exec(`INSERT INTO "File"(id,name,path,type,size,"storageDestinationId","teamId","uploadedBy","updatedAt",deleted) VALUES($1,'fixture.csv','fixture.csv','text/csv',40,$2,$3,$4,now(),true)`, file, storage, team, user)
+	exec(`UPDATE connector_sources SET configuration=jsonb_build_object('file_id',$2::text) WHERE id=$1`, source, file)
+	exec(`UPDATE connector_sync_runs SET "configurationSnapshot"=jsonb_build_object('file_id',$2::text),"fileHash"=$3 WHERE id=$1`, id, file, strings.Repeat("a", 64))
+	t.Cleanup(func() {
+		s.DB.Exec(`UPDATE "File" SET deleted=true,"deletedAt"=now() WHERE id=$1`, file)
+		s.DB.Exec(`UPDATE postgoose_storage_destinations SET deleted=true,"deletedAt"=now() WHERE id=$1`, storage)
+	})
+	ctx := context.Background()
+	if lease, err := s.Claim(ctx); err != nil || lease != nil {
+		t.Fatal("revoked file claimed", lease, err)
+	}
+	exec(`UPDATE "File" SET deleted=false WHERE id=$1`, file)
+	lease, err := s.Claim(ctx)
+	if err != nil || lease == nil {
+		t.Fatal("file was not claimed", err)
+	}
+	exec(`UPDATE connector_sync_runs SET "lastReceipt"='{"sequence":1}' WHERE id=$1`, id)
+	for _, table := range []string{`"File"`, `postgoose_storage_destinations`} {
+		target := file
+		if table != `"File"` {
+			target = storage
+		}
+		exec(`UPDATE `+table+` SET deleted=true WHERE id=$1`, target)
+		if active, err := s.Active(ctx, *lease); err != nil || active {
+			t.Fatal("revoked file active", active, err)
+		}
+		if err := s.Succeed(ctx, *lease, 1); !errors.Is(err, ErrLeaseUnavailable) {
+			t.Fatal("revoked file succeeded", err)
+		}
+		exec(`UPDATE `+table+` SET deleted=false WHERE id=$1`, target)
+	}
+	if err := s.Succeed(ctx, *lease, 1); err != nil {
+		t.Fatal(err)
+	}
+}

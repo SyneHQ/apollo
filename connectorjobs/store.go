@@ -48,6 +48,13 @@ const current = ` r.deleted=false AND s.deleted=false AND s.revision=r."sourceRe
  AND s."destinationSchema"=r."destinationSchema" AND c.deleted=false AND c.type='POSTGRESQL'
  AND t.deleted=false AND u.deleted=false AND m.deleted=false AND m.role IN ('OWNER','ADMIN')
  AND tenant.deleted=false AND tenant.status='ACTIVE'
+ AND (r."fileHash" IS NULL OR EXISTS (
+ SELECT 1 FROM "File" f
+ JOIN postgoose_storage_destinations d ON d.id=f."storageDestinationId" AND d."teamId"=f."teamId"
+ JOIN tenants ft ON ft.id=d."tenantId" AND ft."teamId"=f."teamId"
+ WHERE f.id=r."configurationSnapshot"->>'file_id' AND f."teamId"=r."teamId"
+ AND f.deleted=false AND d.deleted=false AND ft.deleted=false AND ft.status='ACTIVE'
+ AND f.size>0 AND f.size<=52428800 AND lower(f.name) LIKE '%.csv'))
  AND r."expiresAt">(clock_timestamp() AT TIME ZONE 'UTC') `
 
 func (s Store) begin(ctx context.Context) (*sql.Tx, error) {
@@ -132,6 +139,26 @@ func (s Store) Succeed(ctx context.Context, lease Lease, sequence int64) error {
 	}
 	if err != nil {
 		return err
+	}
+	var fileInput bool
+	if err = tx.QueryRowContext(ctx, `SELECT "fileHash" IS NOT NULL FROM connector_sync_runs WHERE id=$1`, id).Scan(&fileInput); err != nil {
+		return err
+	}
+	if fileInput {
+		var fileID string
+		err = tx.QueryRowContext(ctx, `SELECT f.id FROM "File" f
+ JOIN postgoose_storage_destinations d ON d.id=f."storageDestinationId" AND d."teamId"=f."teamId"
+ JOIN tenants ft ON ft.id=d."tenantId" AND ft."teamId"=f."teamId"
+ JOIN connector_sync_runs r ON r.id=$1 AND f.id=r."configurationSnapshot"->>'file_id' AND f."teamId"=r."teamId"
+ WHERE f.deleted=false AND d.deleted=false AND ft.deleted=false AND ft.status='ACTIVE'
+ AND f.size>0 AND f.size<=52428800 AND lower(f.name) LIKE '%.csv'
+ FOR SHARE OF f,d,ft`, id).Scan(&fileID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrLeaseUnavailable
+		}
+		if err != nil {
+			return err
+		}
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE connector_sync_runs SET status='SUCCEEDED',"finishedAt"=clock_timestamp() AT TIME ZONE 'UTC',
  "updatedAt"=clock_timestamp() AT TIME ZONE 'UTC',"leaseId"=NULL WHERE id=$1`, id); err != nil {

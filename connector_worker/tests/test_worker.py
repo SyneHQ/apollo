@@ -76,3 +76,35 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(main(),1)
         self.assertNotIn("secret-canary",output.getvalue())
         self.assertEqual(json.loads(output.getvalue())["error"],"connector_worker_failed")
+
+    def test_file_worker_verifies_bytes_and_preserves_exact_amounts(self):
+        from contextlib import contextmanager
+        from hashlib import sha256
+        env,data,_=self.fixture()
+        data["manifest"]=json.loads((Path(__file__).parent/"fixtures/merchant-report.json").read_text())
+        data["manifest_digest"]=content_digest(data["manifest"])
+        data["stream_id"]="report_rows"
+        data["configuration"]={"file_id":"fixture-file","source_name":"Merchant","timezone":"UTC","id_column":"id","amount_column":"amount","currency_column":"currency"}
+        raw=b"id,amount,currency\none,99999999999999.123456,USD\ntwo,-0.010,EUR\n"
+        data["file_hash"]=sha256(raw).hexdigest()
+        @contextmanager
+        def source():
+            with io.BytesIO(raw) as stream:yield stream
+        sink=Destination()
+        with patch("syne_connectors.worker.BootstrapClient") as bootstrap,patch("syne_connectors.worker.BridgeSink",return_value=sink):
+            bootstrap.return_value.fetch.return_value=data
+            bootstrap.return_value.file.side_effect=source
+            result=run_worker(env,threading.Event())
+        self.assertEqual(result["records_committed"],2)
+        self.assertEqual(sink.inner.rows["one"]["payload"]["fields"]["amount"],"99999999999999.123456")
+        self.assertEqual(sink.inner.rows["two"]["payload"]["fields"]["amount"],"-0.010")
+        for invalid in [None,"a"*64]:
+            bad=deepcopy(data)
+            if invalid is None:del bad["file_hash"]
+            else:bad["file_hash"]=invalid
+            sink=Destination()
+            with patch("syne_connectors.worker.BootstrapClient") as bootstrap,patch("syne_connectors.worker.BridgeSink",return_value=sink):
+                bootstrap.return_value.fetch.return_value=bad
+                bootstrap.return_value.file.side_effect=source
+                with self.assertRaises(ConnectorError):run_worker(env,threading.Event())
+            self.assertEqual(sink.inner.rows,{})

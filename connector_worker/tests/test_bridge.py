@@ -84,3 +84,20 @@ class BridgeTests(unittest.TestCase):
         with patch("syne_connectors.bridge.http.client.HTTPSConnection") as factory:
             with self.assertRaisesRegex(ConnectorError,"cancelled"): BridgeSink("https://bridge.example","secret",b).state()
             factory.assert_not_called()
+
+    def test_file_download_is_bounded_and_uses_only_the_scoped_app_route(self):
+        from syne_connectors.bridge import BootstrapClient, BoundedResponse
+        data=b"id,amount,currency\none,1.00,USD\n"
+        conn=Connection(Response(data=data,headers={"Content-Length":str(len(data))}))
+        with patch("syne_connectors.bridge.http.client.HTTPSConnection",return_value=conn):
+            with BootstrapClient("https://app.example","file-token",budget()).file() as source:
+                self.assertEqual(source.read(65536),data)
+                self.assertEqual(source.read(65536),b"")
+        self.assertEqual(conn.requests[0][0:2],("POST","/api/internal/connectors/file"))
+        self.assertEqual(conn.requests[0][2]["body"],b"{}")
+        self.assertEqual(conn.requests[0][2]["headers"]["X-Job-Token"],"file-token")
+        self.assertTrue(conn.closed)
+        for payload,length,code in [(b"123456",None,"destination_response_limit"),(b"123",4,"destination_response_truncated")]:
+            reader=BoundedResponse(Response(data=payload),Connection(None),budget(),5,length)
+            with self.assertRaisesRegex(ConnectorError,code):
+                while reader.read(64):pass

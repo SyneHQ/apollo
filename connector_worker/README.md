@@ -95,3 +95,30 @@ all capabilities dropped, no-new-privileges, 512 MiB memory, one CPU and a PID
 limit. The image is approximately 202 MB. Unit fixtures do not establish a
 merchant sync. The image has not been published; Apollo's supervisor wiring and
 authenticated app-to-container acceptance are still subsequent work.
+
+## Dispatched CSV inputs
+
+The executable worker also accepts the built-in merchant CSV manifest. File
+bootstrap requires a pinned `file_hash`; the worker POSTs an empty object to the
+fixed `/api/internal/connectors/file` route on the configured app origin using
+its existing bootstrap capability. It receives no arbitrary URL/path or storage
+credentials. Binary responses are bounded to 50 MB, identity encoding, verified
+TLS and the shared deadline. A private temporary copy is hash-verified before
+record parsing or commits. An interrupted download fails; an explicit retry
+resumes the same durable checkpoint. Destination initialization can precede
+that download under the previously reviewed install grant.
+
+Apollo now checks the workspace file, storage and storage tenant during claim,
+activity polling and successful completion. The Go companion change locks those
+rows during each destination operation. Enable the app's additional
+`CONNECTOR_FILE_SYNCS_ENABLED` flag only after deploying both companions and a
+new immutable worker image; no production settings are changed here.
+
+All 37 Python tests and the race-enabled queue/supervisor tests passed. The Go
+`TestFileWorkerThroughTLSBridge` runs `tests/file_acceptance.py` with real TLS and
+PostgreSQL, fixture bootstrap/object responses, a truncated download, lost batch
+acknowledgement and two complete 501-row scans. The companion bridge's content
+transition deduplication retains 501 current rows and 501 versions with exact
+money. This does not claim live object-storage/KMS or authenticated Next.js-to-
+container acceptance. Earlier validation counts in this document describe the
+corresponding historical increments.

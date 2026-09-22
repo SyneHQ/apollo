@@ -1,4 +1,5 @@
-"""One leased REST sync: bootstrap, extract, persist, verify terminal state."""
+"""One leased source sync: bootstrap, extract, persist, verify terminal state."""
+from contextlib import ExitStack
 from datetime import datetime
 import json
 import os
@@ -14,6 +15,7 @@ from .bridge import BootstrapClient, BridgeSink
 from .handoff import write_pages
 from .manifest import ConnectorError, canonical, configuration, require, validate_manifest
 from .pages import rest_pages
+from .csv_source import csv_pages
 from .records import normalize_record
 from .transport import Budget
 
@@ -43,7 +45,7 @@ def run_worker(env, cancelled):
     context = ssl.create_default_context(cadata=ca)
     bootstrap = BootstrapClient(env.get("CONNECTOR_BOOTSTRAP_ORIGIN"), env.get("CONNECTOR_BOOTSTRAP_TOKEN"), budget, tls_context=context)
     data = retry_control(bootstrap.fetch, budget)
-    require(set(data) == {"run_id", "stream_id", "manifest_digest", "manifest", "configuration", "expires_at"}
+    require(set(data) - {"file_hash"} == {"run_id", "stream_id", "manifest_digest", "manifest", "configuration", "expires_at"}
             and data["run_id"] == run_id and isinstance(data["manifest_digest"], str)
             and re.fullmatch(r"[a-f0-9]{64}", data["manifest_digest"]), "worker_bootstrap_invalid")
     try:
@@ -54,8 +56,14 @@ def run_worker(env, cancelled):
     except (TypeError, AttributeError, ValueError, OverflowError):
         raise ConnectorError("worker_bootstrap_invalid") from None
     budget = Budget(min(budget.deadline, time.monotonic()+remaining), cancelled)
+    bootstrap.budget = budget
     manifest = validate_manifest(canonical(data["manifest"]), data["manifest_digest"])
-    require(manifest["runtime"]["kind"] == "rest", "runtime_unsupported")
+    kind = manifest["runtime"]["kind"]
+    require(kind in {"rest", "file"}, "runtime_unsupported")
+    if kind == "file":
+        require(isinstance(data.get("file_hash"), str) and re.fullmatch(r"[a-f0-9]{64}", data["file_hash"]), "file_hash_required")
+    else:
+        require("file_hash" not in data, "worker_bootstrap_invalid")
     streams = [stream for stream in manifest["streams"] if stream["id"] == data["stream_id"]]
     require(len(streams) == 1, "worker_stream_invalid")
     stream = streams[0]
@@ -65,8 +73,15 @@ def run_worker(env, cancelled):
     sink = BridgeSink(env.get("CONNECTOR_BRIDGE_ORIGIN"), env.get("CONNECTOR_INGESTION_TOKEN"), budget, tls_context=context)
     retry_control(sink.install, budget)
     state = retry_control(sink.state, budget)
-    result = write_pages(rest_pages(manifest, stream, values, state["checkpoint"], budget), sink, state,
-                         run_id, lambda row: normalize_record(manifest, stream, row), budget)
+    with ExitStack() as stack:
+        if kind == "file":
+            source = stack.enter_context(bootstrap.file())
+            pages = csv_pages(manifest, values, source, data["file_hash"], state["checkpoint"], budget)
+        else:
+            pages = rest_pages(manifest, stream, values, state["checkpoint"], budget)
+        if hasattr(pages, "close"):
+            stack.callback(pages.close)
+        result = write_pages(pages, sink, state, run_id, lambda row: normalize_record(manifest, stream, row), budget)
     final = retry_control(sink.state, budget)
     require(final["sequence"] == result["sequence"] and final["checkpoint"].get("done") is True,
             "destination_not_complete")

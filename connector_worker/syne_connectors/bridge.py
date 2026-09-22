@@ -1,6 +1,7 @@
 """Bounded first-party HTTPS handoff; never a general SQL or source client."""
 import http.client
 import ssl
+from contextlib import contextmanager
 from urllib.parse import urlsplit
 
 from .handoff import MAX_BATCH_BYTES
@@ -56,16 +57,28 @@ class BridgeSink:
         return result
 
     def _call(self, operation, body):
+        limit = MAX_BOOTSTRAP_BYTES if operation == "bootstrap" else MAX_RESPONSE_BYTES
+        with self._response(operation, body, limit) as reader:
+            data = bytearray()
+            while chunk := reader.read(8192):
+                data.extend(chunk)
+            result = parse_json(bytes(data), limit)
+            require(isinstance(result, dict), "destination_response_invalid")
+            return result
+
+    @contextmanager
+    def _response(self, operation, body, limit):
         paths = {name: "/api/v1/ingestion/" + name for name in ("install", "state", "commit")}
         paths["bootstrap"] = "/api/internal/connectors/bootstrap"
+        paths["file"] = "/api/internal/connectors/file"
         require(operation in paths, "bridge_operation_invalid")
-        limit = MAX_BOOTSTRAP_BYTES if operation == "bootstrap" else MAX_RESPONSE_BYTES
         connection = http.client.HTTPSConnection(self._host, self._port,
             timeout=min(10, self.budget.remaining()), context=self._context)
         try:
             connection.request("POST", paths[operation], body=body,
                 headers={"X-Job-Token": self._token, "Content-Type": "application/json",
-                         "Accept": "application/json", "Accept-Encoding": "identity"})
+                         "Accept": "application/octet-stream" if operation == "file" else "application/json",
+                         "Accept-Encoding": "identity"})
             raw = connection.getresponse()
             # Never follow redirects or include upstream error bodies in errors.
             if raw.status in {401, 403}:
@@ -82,19 +95,7 @@ class BridgeSink:
             require(raw.getheader("Content-Encoding", "identity") == "identity", "destination_response_invalid")
             length = raw.getheader("Content-Length")
             require(length is None or (length.isdigit() and int(length) <= limit), "destination_response_limit")
-            data = bytearray()
-            while True:
-                self.budget.remaining()
-                if connection.sock is not None:
-                    connection.sock.settimeout(min(10, self.budget.remaining()))
-                chunk = raw.read1(min(8192, limit + 1 - len(data)))
-                if not chunk:
-                    break
-                data.extend(chunk)
-                require(len(data) <= limit, "destination_response_limit")
-            result = parse_json(bytes(data), limit)
-            require(isinstance(result, dict), "destination_response_invalid")
-            return result
+            yield BoundedResponse(raw, connection, self.budget, limit, int(length) if length is not None else None)
         except ssl.SSLError:
             raise ConnectorError("destination_tls_failed") from None
         except (OSError, http.client.HTTPException):
@@ -108,3 +109,26 @@ class BridgeSink:
 class BootstrapClient(BridgeSink):
     def fetch(self):
         return self._call("bootstrap", b"{}")
+
+    def file(self):
+        # Exact app-owned route, same run-scoped bootstrap capability. No signed
+        # object URL, filesystem path or storage credential enters this worker.
+        return self._response("file", b"{}", 50 * 1024 * 1024)
+
+
+class BoundedResponse:
+    def __init__(self, response, connection, budget, limit, length):
+        self.response, self.connection, self.budget = response, connection, budget
+        self.limit, self.length, self.size = limit, length, 0
+
+    def read(self, size):
+        require(type(size) is int and 0 < size <= 65536, "destination_read_invalid")
+        self.budget.remaining()
+        if self.connection.sock is not None:
+            self.connection.sock.settimeout(min(10, self.budget.remaining()))
+        chunk = self.response.read1(min(size, self.limit + 1 - self.size))
+        self.size += len(chunk)
+        require(self.size <= self.limit and (self.length is None or self.size <= self.length), "destination_response_limit")
+        if not chunk:
+            require(self.length is None or self.size == self.length, "destination_response_truncated")
+        return chunk

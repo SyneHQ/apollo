@@ -47,3 +47,26 @@ Twenty-five Python tests pass, adding CSV precision/provenance, formula preserva
 The public examples from `https://razorpay.com/docs/api/settlements/fetch-all/` and `https://razorpay.com/docs/api/settlements/fetch-recon/` were checked on 2026-09-22 and are stored as test fixtures. They establish that settlement currency is absent and reconciliation identity uses `entity_id` plus `type`. The corrected manifest retains unknown settlement currency as null and preserves debit, credit, fees, tax and linking IDs. It does not default a country or currency.
 
 Workers require Razorpay 1.0.1; the app retains the archived configuration contract for reopening only. Twenty-seven Python tests now pass, including the provider's settlement/payment/refund/transfer/adjustment examples. Live merchant credentials, history coverage and financial reconciliation remain unverified.
+
+## Scoped Go HTTPS handoff
+
+`BridgeSink` posts exact batch bytes to the three fixed ingestion routes on an
+operator-configured HTTPS origin. A scoped job token comes from authorized
+bootstrap, never from source configuration. This first-party transport allows
+private service addresses; provider extraction retains its separate public-only
+network policy. Certificate and hostname verification are mandatory. No proxy,
+redirect, cookie, environment credential or arbitrary SQL capability is used.
+
+Responses are capped at 32 KiB; checkpoints at 16 KiB. Revoked grants and sequence
+conflicts stop immediately. Transport loss and retryable responses preserve the
+exact bytes for the handoff's bounded retry budget. Source records, credentials
+and upstream response bodies never appear in public errors.
+
+Thirty-one unit tests pass. The companion Go `TestPythonWorkerThroughTLSBridge`
+also runs `tests/bridge_acceptance.py` against an actual TLS handler and disposable
+PostgreSQL containing the app run schema. Extraction uses fixture merchant
+responses; a committed partial page survives a simulated worker exit and resumes
+without duplicate records or versions, preserving a large exact monetary value.
+The bootstrap is passed over stdin; the local test CA is explicitly trusted.
+This establishes local cross-process persistence and authorization, not live
+merchant access, KMS credential resolution, Apollo dispatch or deployment.

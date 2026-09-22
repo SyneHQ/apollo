@@ -162,3 +162,30 @@ These are adapter primitives, not enabled dispatch. All 48 Python tests passed,
 including real dlt iteration over fixture responses, scope checks, continuation
 counts, window splitting, overlap, full refresh and invalid checkpoints. Nested
 stream mapping and complete worker acceptance remain subsequent increments.
+
+## Shopify nested-stream adapter
+
+The Shopify 1.1.0 adapter now extracts orders, line items, refund records and
+refund transactions with the fixed read documents. It saves child cursors and
+counts independently; resuming refetches one parent and compares its fingerprint
+before skipping prior child pages. A partial page retains the shared content-hash
+check. Changed parents/pages fail instead of silently resuming stale coordinates.
+Each child connection has an explicit 25,000-object ceiling. Refund arrays are
+requested without `first` and are subject to the transport/record byte limits.
+
+Typed amounts retain exact shop-currency decimal strings; original MoneyBags,
+including presentment money, remain in source provenance. No conversion or
+successful-refund inference occurs. For line items, `updated_at` is the parent
+order's update time; for refund transactions it is the parent refund's update
+time, because the selected transaction contract has no update timestamp.
+Incremental selection follows parent order updates, so a full refresh is needed
+to recheck changes that do not update that timestamp. Missing rows are preserved.
+The API is mutable and does not provide a transactionally consistent snapshot.
+
+The fixture is copied from app.ts #81 at `a030f80e`; its new digest receipt was
+produced by that app's TypeScript implementation. All 56 Python tests pass,
+including four streams, exact money, failed refunds, child/partial-page resume,
+changed-parent rejection, window replay, corrections, cancellation and identical
+lost-ack retries. These are synthetic merchant responses over actual dlt and the
+shared handoff, not live Shopify or Go/PostgreSQL acceptance for this adapter.
+Worker dispatch remains disabled until the following integration increment.

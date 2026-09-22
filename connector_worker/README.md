@@ -226,3 +226,36 @@ separate from the runner error.
 Local image: `syne-commerce-worker:shopify-validation-20260922`, image ID
 `sha256:927dbff24d129f41d30582062c2b9122b9ef7ec09ff19a087838609da7f40580`.
 It has not been published and no production image reference was changed.
+
+
+## Installed private REST packages
+
+Private execution is default-off and requires the coordinator's trusted
+`CONNECTOR_PRIVATE_INSTALLATION` handoff and
+`CONNECTOR_PRIVATE_SYNCS_ENABLED=true`. App bootstrap adds exactly
+`installation: {id, policy_digest, approved_origin}` for private runs and omits
+it for builtins. Either missing half or a builtin/private identity change fails
+before opening the destination.
+
+The worker verifies exact installation identity, the reviewed fixed HTTPS origin,
+manifest digest, domain-separated installation policy and run binding. It permits
+only the current package subset: a non-Syne publisher, generic REST, fixed host,
+snapshot streams, full refresh, concurrency one, no preview, no incremental
+capability and no local files. Manifests remain declarative; packages cannot
+supply worker code, environment variables, arbitrary runtime adapters or hosts
+outside the installation's approved origin. Existing bounded DNS/TLS transport
+checks still apply.
+
+The run binding is the SHA-256 of recursively sorted compact JSON containing
+`manifestDigest`, effective nonsecret `configuration`, `fileHash: null`,
+`installationId` and `policyDigest`. Filtering every declared secret field after
+configuration validation matches the app's stored effective defaults and split
+configuration. Secret rotation does not change this analytical identity. A
+nonsecret parameter/default change does. The policy digest uses
+`syne:connector-install-policy:v1` plus one newline and canonical JSON of
+`{version:1, installationId, teamId, manifestDigest, approvedOrigin}`.
+
+Worker tests use synthetic manifests and mocked transports to establish local
+admission/binding behavior. They are not provider or end-to-end installation
+acceptance. Real private synchronization remains gated on paired app/Apollo/Go
+validation, including revocation before the next customer write.

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ func NewSupervisor(store Store, r runner.Runner, options Options) (*Supervisor, 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := store.DB.ExecContext(ctx, `SELECT "leaseId","lastReceipt" FROM connector_sync_runs LIMIT 0`); err != nil {
+	if _, err := store.DB.ExecContext(ctx, `SELECT "leaseId","lastReceipt","installationId","policyDigest" FROM connector_sync_runs LIMIT 0`); err != nil {
 		return nil, errors.New("connector run migration required")
 	}
 	return &Supervisor{store: store, runner: r, options: options}, nil
@@ -126,6 +127,18 @@ func (s *Supervisor) request(lease Lease) (runner.JobRequest, error) {
 	env := []runner.EnvVar{{Name: "CONNECTOR_RUN_ID", Value: lease.RunID}, {Name: "CONNECTOR_DEADLINE_EPOCH", Value: string(deadline)},
 		{Name: "CONNECTOR_BOOTSTRAP_ORIGIN", Value: s.options.BootstrapOrigin}, {Name: "CONNECTOR_BOOTSTRAP_TOKEN", Value: bootstrap},
 		{Name: "CONNECTOR_BRIDGE_ORIGIN", Value: s.options.BridgeOrigin}, {Name: "CONNECTOR_INGESTION_TOKEN", Value: ingestion}}
+	if lease.InstallationID != "" {
+		if os.Getenv("CONNECTOR_PRIVATE_SYNCS_ENABLED") != "true" || lease.PolicyDigest == "" || lease.ApprovedOrigin == "" || lease.ManifestDigest == "" {
+			return runner.JobRequest{}, ErrLeaseUnavailable
+		}
+		trust, err := json.Marshal(map[string]string{"id": lease.InstallationID, "policy_digest": lease.PolicyDigest, "approved_origin": lease.ApprovedOrigin, "manifest_digest": lease.ManifestDigest, "team_id": lease.Scope.TeamID, "binding": lease.Scope.Binding})
+		if err != nil {
+			return runner.JobRequest{}, err
+		}
+		env = append(env, runner.EnvVar{Name: "CONNECTOR_PRIVATE_INSTALLATION", Value: string(trust)}, runner.EnvVar{Name: "CONNECTOR_PRIVATE_SYNCS_ENABLED", Value: "true"})
+	} else if lease.PolicyDigest != "" || lease.ApprovedOrigin != "" {
+		return runner.JobRequest{}, ErrLeaseUnavailable
+	}
 	if s.options.ServiceCA != "" {
 		env = append(env, runner.EnvVar{Name: "CONNECTOR_SERVICE_CA_PEM", Value: s.options.ServiceCA})
 	}

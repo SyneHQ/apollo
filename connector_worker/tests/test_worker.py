@@ -114,7 +114,7 @@ class WorkerTests(unittest.TestCase):
         from syne_connectors.transport import BoundedSession
         env, data, _ = self.fixture()
         data.update(manifest=MANIFEST, manifest_digest=content_digest(MANIFEST), stream_id="line_items", configuration=VALUES)
-        merchant = Merchant(); sink = Destination()
+        merchant = Merchant(); merchant.scopes.append("read_all_orders"); sink = Destination()
         def source(_session, request, url): return merchant.send(request, url)
         with patch("syne_connectors.worker.BootstrapClient") as bootstrap, patch("syne_connectors.worker.BridgeSink", return_value=sink), patch.object(BoundedSession, "_once", source):
             bootstrap.return_value.fetch.return_value = data

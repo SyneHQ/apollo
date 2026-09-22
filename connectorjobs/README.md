@@ -69,3 +69,12 @@ test launched the built worker image through the actual Apollo runner and verifi
 UID 10001, read-only root, zero effective capabilities, no-new-privileges, bounded
 tmpfs and absence of platform secrets, then removed the container. The full
 authenticated app/KMS/merchant workflow and production deployment remain untested.
+
+Worker failures now use a finite, run-bound diagnostic protocol. A failed local
+process returns its bounded logs separately from the runner error; only a matching
+run ID, exact failure-report shape and allowlisted code are accepted into run
+metadata. Unknown output remains `worker_failed`; arbitrary source/log text is
+never copied. Late failures cannot overwrite cancellation. The app companion maps
+these codes to fixed explanatory copy. Queue/supervisor tests with real metadata
+PostgreSQL and actual LocalRunner container failure tests passed with the race
+detector. The isolated worker image passed all 59 Python tests; no deployment.

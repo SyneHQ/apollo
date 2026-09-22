@@ -20,6 +20,7 @@ from .records import normalize_record
 from .shopify.adapter import shopify_pages
 from .shopify.records import normalize_shopify
 from .transport import Budget
+from .diagnostics import public_failure
 
 
 def retry_control(action, budget):
@@ -102,9 +103,13 @@ def main():
         signal.signal(signum, lambda *_: cancelled.set())
     try:
         result = run_worker(os.environ, cancelled)
-    except Exception:
+    except Exception as error:
         # No traceback, request objects, decrypted configuration or source errors.
-        print(json.dumps({"status": "failed", "error": "connector_worker_failed"}), file=sys.stderr)
+        try:
+            run_id = str(UUID(os.environ.get("CONNECTOR_RUN_ID", "")))
+        except ValueError:
+            run_id = None
+        print(json.dumps({"status": "failed", "run_id": run_id, "error": public_failure(error)}), file=sys.stderr)
         return 1
     print(json.dumps(result, separators=(",", ":")))
     return 0

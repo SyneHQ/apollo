@@ -206,3 +206,23 @@ one correction produces exactly one extra version: 55 current rows, 56 versions,
 sequence 9. The exact amount `9999999999999.123456` survives. Merchant and bootstrap
 responses remain fixtures; live Shopify, real KMS and authenticated app-to-container
 acceptance are still unverified. A fresh immutable worker image is required.
+
+## Public failure diagnostics
+
+Known worker failures now emit a small run-bound failure report with a finite
+public code and a nonzero exit. Unknown exceptions and source text become a
+generic code. The local runner returns bounded output separately from its error;
+Apollo accepts only a matching run ID, known failure code and exact report shape.
+No source body, arbitrary log/error text or extra report fields reach metadata.
+Cancellation still wins over a late worker report.
+
+All 59 Python tests pass locally and in the rebuilt Linux ARM64 image with network
+disabled, read-only root, 64 MiB temporary storage, UID 10001, no capabilities,
+no-new-privileges, 512 MiB memory and one CPU. Race-enabled queue/supervisor/runner
+tests passed with disposable metadata PostgreSQL. Two actual LocalRunner container
+tests verified isolation and a nonzero worker exit with the sanitized report kept
+separate from the runner error.
+
+Local image: `syne-commerce-worker:shopify-validation-20260922`, image ID
+`sha256:927dbff24d129f41d30582062c2b9122b9ef7ec09ff19a087838609da7f40580`.
+It has not been published and no production image reference was changed.

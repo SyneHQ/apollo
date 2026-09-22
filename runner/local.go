@@ -114,6 +114,11 @@ func (l *LocalRunner) RunJob(ctx context.Context, _cmd string, req JobRequest) (
 	}
 
 	if waitStatus.StatusCode != 0 {
+		if strings.HasPrefix(req.Name, "connector-sync-") {
+			// Return bounded output separately so the supervisor can parse only
+			// its finite diagnostic protocol, never an arbitrary error string.
+			return logs, fmt.Errorf("connector worker exited with code %d", waitStatus.StatusCode)
+		}
 		return "", fmt.Errorf("local run failed: exit code %d: %s", waitStatus.StatusCode, logs)
 	}
 

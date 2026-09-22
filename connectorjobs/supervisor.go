@@ -193,6 +193,10 @@ func (s *Supervisor) execute(parent context.Context, lease Lease) {
 	output, runErr := s.runner.RunJob(ctx, request.Prefix, request)
 	cancel()
 	<-monitorDone
+	if code := workerFailure(output, lease.RunID); code != "" {
+		s.fail(lease, code)
+		return
+	}
 	if runErr != nil {
 		s.fail(lease, "worker_failed")
 		return

@@ -170,13 +170,15 @@ func (s Store) Succeed(ctx context.Context, lease Lease, sequence int64) error {
 	return tx.Commit()
 }
 
-// Failure codes are controlled by the supervisor, never copied from job output.
+// Failure codes are controlled by the supervisor's constant vocabulary.
 // Cancellation wins over late process completion/failure.
 func (s Store) Fail(ctx context.Context, lease Lease, code string) error {
 	switch code {
 	case "worker_failed", "dispatch_failed", "worker_result_invalid", "authorization_changed":
 	default:
-		return errors.New("invalid connector failure code")
+		if !workerFailureCodes[code] {
+			return errors.New("invalid connector failure code")
+		}
 	}
 	tx, err := s.begin(ctx)
 	if err != nil {

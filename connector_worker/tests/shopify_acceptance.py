@@ -15,7 +15,7 @@ from test_shopify_adapter import Merchant, bag
 
 def main():
     env = json.load(sys.stdin)
-    merchant = Merchant(); interrupted = False
+    merchant = Merchant(); merchant.scopes.append("read_all_orders"); interrupted = False
     def source(_session, request, url):
         nonlocal interrupted
         values = json.loads(request.body)["variables"]

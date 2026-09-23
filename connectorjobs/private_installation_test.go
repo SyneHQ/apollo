@@ -23,7 +23,7 @@ func privateFixture(t *testing.T) (Store, string, string) {
 	}
 	exec(`UPDATE connector_sync_runs SET status='CANCELLED' WHERE id=$1`, builtin)
 	exec(`INSERT INTO connector_installations(id,"teamId","installedById","manifestId","manifestVersion","manifestDigest","packageDigest","policyDigest","approvedOrigin",package)
- SELECT $1,"teamId",$2,'acme/payments','1.0.0',$3,$3,$4,'https://api.acme.example','{}' FROM connector_sources WHERE id=$5`, installation, user, strings.Repeat("a", 64), strings.Repeat("b", 64), source)
+ SELECT $1,"teamId",$2,'acme/payments','1.0.0',$3,$3,$4,'https://api.acme.example','{"packageVersion":1,"manifest":{"id":"acme/payments","version":"1.0.0","publisher":{"id":"acme"},"runtime":{"kind":"rest","origin":{"host":"api.acme.example"}}}}' FROM connector_sources WHERE id=$5`, installation, user, strings.Repeat("a", 64), strings.Repeat("b", 64), source)
 	exec(`INSERT INTO connector_sources(id,"teamId",name,"manifestId","manifestVersion","manifestDigest",configuration,"encryptedSecrets","secretFields","destinationConnectionId","destinationDatabase","destinationSchema","updatedAt","installationId","policyDigest")
  SELECT $1,"teamId",'private fixture','acme/payments','1.0.0',"manifestDigest",configuration,"encryptedSecrets","secretFields","destinationConnectionId","destinationDatabase","destinationSchema",now(),$2,$3 FROM connector_sources WHERE id=$4`, privateSource, installation, strings.Repeat("b", 64), source)
 	exec(`INSERT INTO connector_sync_runs(id,"teamId","sourceId","sourceRevision","requestedById","streamId","manifestId","manifestVersion","manifestDigest","configurationSnapshot",binding,"destinationConnectionId","destinationDatabase","destinationSchema","expiresAt","updatedAt","installationId","policyDigest")

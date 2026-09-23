@@ -7,7 +7,9 @@ executes the pinned REST worker through Apollo's existing local Docker runner.
 
 `Claim` locks one eligible queued run with `SKIP LOCKED`, rechecks current source
 configuration/revision and workspace/admin/user/tenant/destination access, and
-records one 15-minute lease plus audit. It copies no credentials or source data.
+records one 15-minute lease plus audit. Each claim scans at most 100 eligible
+candidates, skipping busy run and installation rows while preserving installation-
+before-run lock order. A fully busy window yields until the next supervisor poll. It copies no credentials or source data.
 Other dispatchers cannot claim it again, including after a process restart.
 
 `Active` supports cancellation polling; the Go ingestion bridge independently
@@ -78,3 +80,31 @@ never copied. Late failures cannot overwrite cancellation. The app companion map
 these codes to fixed explanatory copy. Queue/supervisor tests with real metadata
 PostgreSQL and actual LocalRunner container failure tests passed with the race
 detector. The isolated worker image passed all 59 Python tests; no deployment.
+
+
+## Private installation authorization
+
+Private runs require `CONNECTOR_PRIVATE_SYNCS_ENABLED=true` in Apollo, in
+addition to the app and Go bridge gates. It defaults off. Existing builtins keep
+null installation/policy references and their existing binding bytes.
+
+Claim, cancellation polling and success finalization require matching installation
+and policy references on source and run, plus an active same-team installation
+with matching manifest ID, version, digest and policy. Claim and success acquire
+an installation share lock before locking a run, matching app revocation's
+installation-before-run lock order. Revocation makes an existing lease inactive;
+the supervisor stops its worker and the Go bridge independently rejects further
+customer operations. A terminal process result still requires a durable receipt.
+
+The supervisor passes `CONNECTOR_PRIVATE_INSTALLATION` only for private runs.
+Its exact fields are `id`, `policy_digest`, `approved_origin`, `manifest_digest`,
+`team_id` and `binding`, derived from the persisted authorized run/installation.
+The worker receives no package, installer credentials or signing key through
+this handoff. Existing scoped JWTs already carry `scope.binding`; no token
+version or broad connection grant is added.
+
+Private metadata columns and `connector_installations` must be migrated before
+starting this supervisor. DB-gated tests cover default-off admission, private
+claim identity, active-lease flag/revocation denial and success denial. Run them
+against the disposable migrated metadata fixture before enabling private sync;
+unit tests or skipped DB tests do not establish live acceptance.

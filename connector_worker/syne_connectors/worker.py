@@ -18,6 +18,7 @@ from .pages import rest_pages
 from .csv_source import csv_pages
 from .records import normalize_record
 from .shopify.adapter import shopify_pages
+from .installation import validate_installation
 from .shopify.records import normalize_shopify
 from .transport import Budget
 from .diagnostics import public_failure
@@ -48,7 +49,7 @@ def run_worker(env, cancelled):
     context = ssl.create_default_context(cadata=ca)
     bootstrap = BootstrapClient(env.get("CONNECTOR_BOOTSTRAP_ORIGIN"), env.get("CONNECTOR_BOOTSTRAP_TOKEN"), budget, tls_context=context)
     data = retry_control(bootstrap.fetch, budget)
-    require(set(data) - {"file_hash"} == {"run_id", "stream_id", "manifest_digest", "manifest", "configuration", "expires_at"}
+    require(set(data) - {"file_hash", "installation"} == {"run_id", "stream_id", "manifest_digest", "manifest", "configuration", "expires_at"}
             and data["run_id"] == run_id and isinstance(data["manifest_digest"], str)
             and re.fullmatch(r"[a-f0-9]{64}", data["manifest_digest"]), "worker_bootstrap_invalid")
     try:
@@ -75,6 +76,7 @@ def run_worker(env, cancelled):
     require(shopify or stream["sync"]["mode"] == "snapshot", "incremental_adapter_required")
     require(manifest["id"] != "syne/razorpay" or manifest["version"] == "1.0.1", "connector_upgrade_required")
     values = configuration(manifest, data["configuration"])
+    validate_installation(env, data, manifest, values)
     sink = BridgeSink(env.get("CONNECTOR_BRIDGE_ORIGIN"), env.get("CONNECTOR_INGESTION_TOKEN"), budget, tls_context=context)
     retry_control(sink.install, budget)
     state = retry_control(sink.state, budget)

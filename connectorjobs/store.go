@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,10 @@ type Lease struct {
 	SourceRevision int
 	Scope          Scope
 	ExpiresAt      time.Time
+	InstallationID string
+	PolicyDigest   string
+	ApprovedOrigin string
+	ManifestDigest string
 }
 
 type Store struct{ DB *sql.DB }
@@ -43,7 +48,16 @@ const joins = ` FROM connector_sync_runs r
  JOIN postgoose_user_teams m ON m."teamId"=r."teamId" AND m."userId"=r."requestedById" `
 
 const current = ` r.deleted=false AND s.deleted=false AND s.revision=r."sourceRevision"
- AND s."manifestDigest"=r."manifestDigest" AND s.configuration=r."configurationSnapshot"
+ AND s."manifestDigest"=r."manifestDigest" AND s."manifestId"=r."manifestId" AND s."manifestVersion"=r."manifestVersion"
+ AND s.configuration=r."configurationSnapshot"
+ AND s."installationId" IS NOT DISTINCT FROM r."installationId"
+ AND s."policyDigest" IS NOT DISTINCT FROM r."policyDigest"
+ AND ((r."installationId" IS NULL AND r."policyDigest" IS NULL) OR
+ (r."installationId" IS NOT NULL AND r."policyDigest" IS NOT NULL AND EXISTS (
+ SELECT 1 FROM connector_installations i WHERE i.id=r."installationId" AND i."teamId"=r."teamId"
+ AND i.deleted=false AND i."revokedAt" IS NULL AND i."manifestId"=r."manifestId"
+ AND i."manifestVersion"=r."manifestVersion" AND i."manifestDigest"=r."manifestDigest"
+ AND i."policyDigest"=r."policyDigest")))
  AND s."destinationConnectionId"=r."destinationConnectionId" AND s."destinationDatabase"=r."destinationDatabase"
  AND s."destinationSchema"=r."destinationSchema" AND c.deleted=false AND c.type='POSTGRESQL'
  AND t.deleted=false AND u.deleted=false AND m.deleted=false AND m.role IN ('OWNER','ADMIN')
@@ -56,6 +70,44 @@ const current = ` r.deleted=false AND s.deleted=false AND s.revision=r."sourceRe
  AND f.deleted=false AND d.deleted=false AND ft.deleted=false AND ft.status='ACTIVE'
  AND f.size>0 AND f.size<=52428800 AND lower(f.name) LIKE '%.csv'))
  AND r."expiresAt">(clock_timestamp() AT TIME ZONE 'UTC') `
+
+// The private rollout flag is a live authorization gate in this process.
+func liveCurrent() string {
+	if os.Getenv("CONNECTOR_PRIVATE_SYNCS_ENABLED") != "true" {
+		return current + ` AND r."installationId" IS NULL `
+	}
+	return current
+}
+
+// Lock installation before run/source rows, matching installation revocation.
+// Recheck the complete live predicate after acquiring the lock.
+func lockInstallation(ctx context.Context, tx *sql.Tx, runID string, skipLocked bool) error {
+	var installation sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT "installationId" FROM connector_sync_runs WHERE id=$1`, runID).Scan(&installation); err != nil {
+		return err
+	}
+	if !installation.Valid {
+		return nil
+	}
+	if os.Getenv("CONNECTOR_PRIVATE_SYNCS_ENABLED") != "true" {
+		return ErrLeaseUnavailable
+	}
+	locking := " FOR SHARE OF i"
+	if skipLocked {
+		locking += " SKIP LOCKED"
+	}
+	var id string
+	err := tx.QueryRowContext(ctx, `SELECT i.id FROM connector_installations i
+ JOIN connector_sync_runs r ON r."installationId"=i.id AND r."teamId"=i."teamId"
+ WHERE r.id=$1 AND i.deleted=false AND i."revokedAt" IS NULL
+ AND i."manifestId"=r."manifestId" AND i."manifestVersion"=r."manifestVersion"
+ AND i."manifestDigest"=r."manifestDigest" AND i."policyDigest"=r."policyDigest"
+ `+locking, runID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrLeaseUnavailable
+	}
+	return err
+}
 
 func (s Store) begin(ctx context.Context) (*sql.Tx, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -83,17 +135,53 @@ func (s Store) Claim(ctx context.Context) (*Lease, error) {
 		return nil, err
 	}
 	defer tx.Rollback()
-	var lease Lease
-	err = tx.QueryRowContext(ctx, `SELECT r.id,r."requestedById",r."sourceRevision",r."teamId",r."sourceId",
- r."destinationConnectionId",r."destinationDatabase",r."destinationSchema",r."streamId",r.binding`+joins+`
- WHERE r.status='QUEUED' AND `+current+` ORDER BY r."createdAt",r.id LIMIT 1 FOR UPDATE OF r SKIP LOCKED`).Scan(
-		&lease.RunID, &lease.UserID, &lease.SourceRevision, &lease.Scope.TeamID, &lease.Scope.SourceID,
-		&lease.Scope.ConnectionID, &lease.Scope.Database, &lease.Scope.Schema, &lease.Scope.Stream, &lease.Scope.Binding)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+	// Read a bounded window first; each candidate is reauthorized under locks.
+	// A busy run or installation must not hide other available work in the window.
+	const maxClaimCandidates = 100
+	rows, err := tx.QueryContext(ctx, `SELECT r.id`+joins+` WHERE r.status='QUEUED' AND `+liveCurrent()+` ORDER BY r."createdAt",r.id LIMIT $1`, maxClaimCandidates)
 	if err != nil {
 		return nil, err
+	}
+	candidates := make([]string, 0, maxClaimCandidates)
+	for rows.Next() {
+		var candidate string
+		if err = rows.Scan(&candidate); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, candidate)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	var lease Lease
+	found := false
+	for _, candidate := range candidates {
+		if err = lockInstallation(ctx, tx, candidate, true); errors.Is(err, ErrLeaseUnavailable) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		err = tx.QueryRowContext(ctx, `SELECT r.id,r."requestedById",r."sourceRevision",r."teamId",r."sourceId",
+ r."destinationConnectionId",r."destinationDatabase",r."destinationSchema",r."streamId",r.binding,COALESCE(r."installationId",''),COALESCE(r."policyDigest",''),r."manifestDigest",
+ COALESCE((SELECT i."approvedOrigin" FROM connector_installations i WHERE i.id=r."installationId" AND i."teamId"=r."teamId"),'')`+joins+`
+ WHERE r.id=$1 AND r.status='QUEUED' AND `+liveCurrent()+` FOR UPDATE OF r SKIP LOCKED`, candidate).Scan(
+			&lease.RunID, &lease.UserID, &lease.SourceRevision, &lease.Scope.TeamID, &lease.Scope.SourceID,
+			&lease.Scope.ConnectionID, &lease.Scope.Database, &lease.Scope.Schema, &lease.Scope.Stream, &lease.Scope.Binding,
+			&lease.InstallationID, &lease.PolicyDigest, &lease.ManifestDigest, &lease.ApprovedOrigin)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		found = true
+		break
+	}
+	if !found {
+		return nil, nil
 	}
 	lease.LeaseID = uuid.NewString()
 	err = tx.QueryRowContext(ctx, `UPDATE connector_sync_runs SET status='RUNNING',"leaseId"=$2,
@@ -116,7 +204,7 @@ func (s Store) Claim(ctx context.Context) (*Lease, error) {
 func (s Store) Active(ctx context.Context, lease Lease) (bool, error) {
 	var active bool
 	err := s.DB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1`+joins+` WHERE r.id=$1 AND r."leaseId"=$2
- AND r.status='RUNNING' AND `+current+`)`, lease.RunID, lease.LeaseID).Scan(&active)
+ AND r.status='RUNNING' AND `+liveCurrent()+`)`, lease.RunID, lease.LeaseID).Scan(&active)
 	return active, err
 }
 
@@ -131,9 +219,12 @@ func (s Store) Succeed(ctx context.Context, lease Lease, sequence int64) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err = lockInstallation(ctx, tx, lease.RunID, false); err != nil {
+		return err
+	}
 	var id string
 	err = tx.QueryRowContext(ctx, `SELECT r.id`+joins+` WHERE r.id=$1 AND r."leaseId"=$2 AND r.status='RUNNING'
- AND (r."lastReceipt"->>'sequence')::bigint=$3 AND `+current+` FOR UPDATE OF r FOR SHARE OF s,c,tenant,t,u,m`, lease.RunID, lease.LeaseID, sequence).Scan(&id)
+ AND (r."lastReceipt"->>'sequence')::bigint=$3 AND `+liveCurrent()+` FOR UPDATE OF r FOR SHARE OF s,c,tenant,t,u,m`, lease.RunID, lease.LeaseID, sequence).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrLeaseUnavailable
 	}

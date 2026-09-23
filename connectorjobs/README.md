@@ -7,7 +7,9 @@ executes the pinned REST worker through Apollo's existing local Docker runner.
 
 `Claim` locks one eligible queued run with `SKIP LOCKED`, rechecks current source
 configuration/revision and workspace/admin/user/tenant/destination access, and
-records one 15-minute lease plus audit. It copies no credentials or source data.
+records one 15-minute lease plus audit. Each claim scans at most 100 eligible
+candidates, skipping busy run and installation rows while preserving installation-
+before-run lock order. A fully busy window yields until the next supervisor poll. It copies no credentials or source data.
 Other dispatchers cannot claim it again, including after a process restart.
 
 `Active` supports cancellation polling; the Go ingestion bridge independently

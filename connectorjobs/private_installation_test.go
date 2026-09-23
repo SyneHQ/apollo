@@ -114,3 +114,48 @@ func TestPrivateSupervisorHandoffContainsOnlyTrustedIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestClaimSkipsBusyQueueHeadWithoutReversingInstallationLocks(t *testing.T) {
+	for _, lock := range []string{"run", "installation", "all runs"} {
+		t.Run(lock, func(t *testing.T) {
+			t.Setenv("CONNECTOR_PRIVATE_SYNCS_ENABLED", "true")
+			s, privateRun, installation := privateFixture(t)
+			_, nextRun, _, _ := fixture(t)
+			tx, err := s.DB.BeginTx(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			query, id := `SELECT id FROM connector_sync_runs WHERE id=$1 FOR UPDATE`, privateRun
+			if lock == "installation" {
+				query, id = `SELECT id FROM connector_installations WHERE id=$1 FOR UPDATE`, installation
+			}
+			var locked string
+			if err = tx.QueryRow(query, id).Scan(&locked); err != nil {
+				t.Fatal(err)
+			}
+			if lock == "all runs" {
+				if err = tx.QueryRow(`SELECT id FROM connector_sync_runs WHERE id=$1 FOR UPDATE`, nextRun).Scan(&locked); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			lease, err := s.Claim(ctx)
+			if err != nil {
+				t.Fatal("busy candidates must not block queue progress", err)
+			}
+			if lock == "all runs" {
+				if lease != nil {
+					t.Fatal("a completely busy candidate window must yield")
+				}
+			} else if lease == nil || lease.RunID != nextRun {
+				t.Fatal("busy head hid an eligible unlocked run")
+			}
+			var status string
+			if err = s.DB.QueryRow(`SELECT status FROM connector_sync_runs WHERE id=$1`, privateRun).Scan(&status); err != nil || status != "QUEUED" {
+				t.Fatal("busy head was changed", status, err)
+			}
+		})
+	}
+}

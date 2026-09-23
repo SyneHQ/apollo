@@ -159,6 +159,17 @@ class PrivateWorkerTests(unittest.TestCase):
             bootstrap.return_value.fetch.return_value=data
             self.assertEqual(run_worker(env,threading.Event())["records_committed"],1)
 
+    def test_private_blank_default_request_uses_normalized_snapshot(self):
+        env, data, page = self.private_fixture()
+        # Private app admission normalizes an explicitly blank optional field
+        # before freezing its nonsecret snapshot. Bootstrap returns that value.
+        original_request = {**data["configuration"], "region": ""}
+        self.assertNotIn("region", configuration(data["manifest"], original_request))
+        data["configuration"]["region"] = "us"
+        with patch("syne_connectors.worker.BootstrapClient") as bootstrap, patch("syne_connectors.worker.BridgeSink", return_value=Destination()), patch("syne_connectors.worker.rest_pages", return_value=iter([page])):
+            bootstrap.return_value.fetch.return_value = data
+            self.assertEqual(run_worker(env, threading.Event())["records_committed"], 1)
+
     def test_private_unreviewed_scope_config_and_disabled_flags_never_open_destination(self):
         for mutation in ["flag", "missing_trust", "missing_installation", "null_installation", "extra_installation", "id", "policy", "origin", "manifest", "team", "binding", "config", "reserved", "preview", "concurrency", "subdomain", "incremental"]:
             with self.subTest(mutation=mutation):

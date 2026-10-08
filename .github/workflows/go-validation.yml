@@ -1,0 +1,44 @@
+name: Go validation
+
+on:
+  pull_request:
+  push:
+    branches: [sudo]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  startup-and-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: apollo_test
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: apollo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U apollo_test -d apollo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SECURITY_TEST_DATABASE_URL: postgres://apollo_test:disposable-ci-only@localhost:5432/apollo_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test startup, authorization, scheduling and migrations
+        run: go test -count=1 -race -p 2 . ./keys ./scheduler ./server ./cmd

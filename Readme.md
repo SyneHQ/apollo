@@ -34,3 +34,9 @@ You'll be asked
 [For Node click here](/proto/generated/node/proto/README.md)
 
 > For all the langs you can generate from [Proto def](/proto/jobs.proto)
+
+### Private API TLS
+
+Mount the scheduler certificate and key as read-only secret files. Set `APOLLO_TLS_CERT_FILE` and `APOLLO_TLS_KEY_FILE`. The certificate must cover the hostname clients use. Clients must verify that hostname and trust the issuing CA. TLS 1.2 or newer is required; service-token and team authorization remain required.
+
+Production rejects missing TLS configuration. Local fixtures can explicitly set `APOLLO_ALLOW_INSECURE=true` only outside production and without TLS files. The `--migrate-only` command does not start the API or require TLS.

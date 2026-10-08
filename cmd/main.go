@@ -97,7 +97,12 @@ func run() error {
 		return errors.New("metadata authorization database is unavailable")
 	}
 	authority := jobsserver.SQLJobAuthority{DB: metadataDB}
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(jobsserver.Authorization(token, authority)), grpc.MaxRecvMsgSize(128*1024))
+	transport, err := jobsserver.TransportOptions(config.Environment)
+	if err != nil {
+		return err
+	}
+	transport = append(transport, grpc.UnaryInterceptor(jobsserver.Authorization(token, authority)), grpc.MaxRecvMsgSize(128*1024))
+	grpcServer := grpc.NewServer(transport...)
 	js, err := jobsserver.NewJobsServer(r, config)
 	if err != nil {
 		return err

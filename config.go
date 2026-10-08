@@ -132,7 +132,7 @@ func (c *Config) Validate() error {
 	if c.Store.Path == "" {
 		return errors.New("STORE_PATH must be set")
 	}
-	if c.Environment == "production" && c.Store.Driver == "sqlite" && !filepath.IsAbs(c.Store.Path) {
+	if c.Environment == "production" && c.JobsProvider != "cloudrun" && c.Store.Driver == "sqlite" && !filepath.IsAbs(c.Store.Path) {
 		return errors.New("production SQLite STORE_PATH must be an absolute path on persistent storage")
 	}
 	if c.JobsProvider == "cloudrun" && (c.GCPProjectID == "" || c.GCPRegion == "") {

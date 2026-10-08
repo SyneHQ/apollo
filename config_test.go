@@ -13,6 +13,12 @@ func TestProductionConfig(t *testing.T) {
 		invalid bool
 	}{
 		{"valid", func(*Config) {}, false},
+		{"cloud provider has no local scheduler", func(c *Config) {
+			c.JobsProvider = "cloudrun"
+			c.GCPProjectID = "test"
+			c.GCPRegion = "us-central1"
+			c.Store = StoreConfig{Driver: "sqlite", Path: "unused.db"}
+		}, false},
 		{"invalid provider", func(c *Config) { c.JobsProvider = "locla" }, true},
 		{"invalid port", func(c *Config) { c.Port = "0" }, true},
 		{"ephemeral sqlite", func(c *Config) { c.Store = StoreConfig{Driver: "sqlite", Path: "jobs.db"} }, true},

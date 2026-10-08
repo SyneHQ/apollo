@@ -26,6 +26,7 @@ type Scheduler struct {
 	mu      sync.RWMutex
 	cron    *cron.Cron
 	entries map[string]cron.EntryID
+	running map[string]bool
 
 	// baseCtx is used as the parent for all job contexts.
 	baseCtx context.Context
@@ -56,6 +57,7 @@ func New(logger cron.Logger) *Scheduler {
 	return &Scheduler{
 		cron:    c,
 		entries: make(map[string]cron.EntryID),
+		running: make(map[string]bool),
 		baseCtx: baseCtx,
 		cancel:  cancel,
 	}
@@ -95,6 +97,12 @@ func (s *Scheduler) Stop() context.Context {
 //   - is cancelled when the scheduler is stopped.
 //   - can be used for deadlines and propagation.
 func (s *Scheduler) Schedule(name string, spec string, fn JobFunc) error {
+	return s.ScheduleSaved(name, spec, fn, nil)
+}
+
+// ScheduleSaved commits persistence before replacing a validated schedule.
+// If validation or persistence fails, the existing schedule remains active.
+func (s *Scheduler) ScheduleSaved(name string, spec string, fn JobFunc, save func() error) error {
 	if name == "" {
 		return fmt.Errorf("scheduler: job name must not be empty")
 	}
@@ -102,29 +110,42 @@ func (s *Scheduler) Schedule(name string, spec string, fn JobFunc) error {
 		return fmt.Errorf("scheduler: JobFunc must not be nil")
 	}
 
+	parsed, err := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor).Parse(spec)
+	if err != nil {
+		return fmt.Errorf("scheduler: invalid schedule")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	// Remove existing entry (if any) so re-scheduling is idempotent.
-	if id, ok := s.entries[name]; ok {
-		s.cron.Remove(id)
-		delete(s.entries, name)
+	if s.baseCtx.Err() != nil {
+		return fmt.Errorf("scheduler: service is stopped")
 	}
-
+	if save != nil {
+		if err := save(); err != nil {
+			return err
+		}
+	}
 	// Wrap fn to inject context and basic logging.
 	wrapped := func() {
+		s.mu.Lock()
+		if s.baseCtx.Err() != nil || s.running[name] {
+			s.mu.Unlock()
+			return
+		}
+		s.running[name] = true
+		s.mu.Unlock()
+		defer func() { s.mu.Lock(); delete(s.running, name); s.mu.Unlock() }()
 		ctx, cancel := context.WithCancel(s.baseCtx)
 		defer cancel()
 
 		if err := fn(ctx); err != nil {
 			// Logging delegated to cron.Logger; add structured info via fmt.
-			log.Printf("scheduler: job %s failed: %s", name, err)
+			log.Printf("scheduler: job %s failed", name)
 		}
 	}
 
-	id, err := s.cron.AddFunc(spec, wrapped)
-	if err != nil {
-		return fmt.Errorf("scheduler: add job %q failed: %w", name, err)
+	id := s.cron.Schedule(parsed, cron.FuncJob(wrapped))
+	if previous, ok := s.entries[name]; ok {
+		s.cron.Remove(previous)
 	}
 
 	s.entries[name] = id

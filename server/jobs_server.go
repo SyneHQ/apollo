@@ -10,6 +10,7 @@ import (
 	"github.com/SyneHQ/apollo/proto"
 	"github.com/SyneHQ/apollo/runner"
 	"github.com/SyneHQ/apollo/scheduler"
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
 
@@ -61,17 +62,33 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 
 	if r.Type == runner.JobTypeRepeatable && s.sched != nil && r.ScheduleSpec != "" {
 		name := r.Name
-		err := s.sched.Schedule(name, r.ScheduleSpec, func(c context.Context) error {
+		err := s.sched.ScheduleSaved(name, r.ScheduleSpec, func(c context.Context) error {
+			r := r
 			start := time.Now().Unix()
 
-			r.JobID = fmt.Sprintf("%s-%d", name, time.Now().Unix())
+			r.JobID = name + "-" + uuid.NewString()
 
-			log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
+			log.Printf("Running job %s", r.JobID)
 			result, err := s.runAuthorized(c, r.Prefix, r)
 			end := time.Now().Unix()
-			log.Printf("Job %s completed with result: %s", r.JobID, result)
+			log.Printf("Job %s completed", r.JobID)
 			s.recordExecution(c, r, r.JobID, result, err, start, end)
 			return err
+		}, func() error {
+			if s.store == nil {
+				return fmt.Errorf("scheduler storage is unavailable")
+			}
+			return s.store.Upsert(ctx, scheduler.JobRecord{
+				Name:           r.Name,
+				AuthorizedUser: r.AuthorizedUser,
+				Image:          r.Image,
+				Command:        r.Command,
+				Cpu:            r.Resources.CPU,
+				Memory:         r.Resources.Memory,
+				Prefix:         r.Prefix,
+				CronSpec:       r.ScheduleSpec,
+				ArgsBase64:     r.ArgsJSONBase64,
+			})
 		})
 
 		nextRun, ok := s.sched.NextRun(r.Name)
@@ -85,34 +102,14 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 			return nil, err
 		}
 
-		if s.store != nil {
-			err = s.store.Upsert(ctx, scheduler.JobRecord{
-				Name:           r.Name,
-				AuthorizedUser: r.AuthorizedUser,
-				Image:          r.Image,
-				Command:        r.Command,
-				Cpu:            r.Resources.CPU,
-				Memory:         r.Resources.Memory,
-				Prefix:         r.Prefix,
-				CronSpec:       r.ScheduleSpec,
-				ArgsBase64:     r.ArgsJSONBase64,
-			})
-
-			if err != nil {
-				log.Println("Error upserting job", err)
-				return nil, err
-			}
-
-			log.Printf("Upserted job %s with cmd: %s and command: %s", r.Name, r.Prefix, r.Command)
-		}
 		return &proto.RunJobResponse{Id: name, Logs: "scheduled"}, nil
 	}
 
 	start := time.Now().Unix()
 
-	r.JobID = fmt.Sprintf("%s-%d", r.Name, time.Now().Unix())
+	r.JobID = r.Name + "-" + uuid.NewString()
 
-	log.Printf("Running job %s with cmd: %s and command: %s", r.JobID, r.Prefix, r.Command)
+	log.Printf("Running job %s", r.JobID)
 
 	s.recordExecution(ctx, r, r.JobID, "", nil, start, 0)
 

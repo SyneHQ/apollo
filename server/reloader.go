@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SyneHQ/apollo/runner"
+	"github.com/google/uuid"
 )
 
 // Reload schedules from store at startup
@@ -24,7 +25,7 @@ func (s *JobsServer) Reload(ctx context.Context) error {
 	for _, r := range records {
 		req := runner.JobRequest{
 			AuthorizedUser: r.AuthorizedUser,
-			JobID:          fmt.Sprintf("%s-%d", r.Name, time.Now().Unix()),
+
 			Name:           r.Name,
 			Command:        r.Command,
 			ArgsJSONBase64: r.ArgsBase64,
@@ -36,6 +37,8 @@ func (s *JobsServer) Reload(ctx context.Context) error {
 		}
 		spec := r.CronSpec
 		err := s.sched.Schedule(r.Name, spec, func(c context.Context) error {
+			req := req
+			req.JobID = req.Name + "-" + uuid.NewString()
 			start := time.Now().Unix()
 			result, err := s.runAuthorized(c, r.Prefix, req)
 			end := time.Now().Unix()

@@ -57,8 +57,8 @@ type Store struct {
 
 // OpenStore creates a new Store instance with the specified driver and connection string
 func OpenStore(driver, path string) (*Store, error) {
-	if driver == "" || path == "" {
-		return nil, errors.New("driver and path cannot be empty")
+	if (driver != "sqlite" && driver != "postgres") || path == "" {
+		return nil, errors.New("store requires sqlite or postgres and a nonempty path")
 	}
 
 	db, err := sql.Open(driver, path)
@@ -66,8 +66,14 @@ func OpenStore(driver, path string) (*Store, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Test the connection
-	if err := db.Ping(); err != nil {
+	// Bound startup checks and schema work. SQLite uses one connection so PRAGMAs apply to all operations.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if driver == "sqlite" {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+	}
+	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -77,12 +83,12 @@ func OpenStore(driver, path string) (*Store, error) {
 		driver: DBDriver(driver),
 	}
 
-	if err := store.configure(); err != nil {
+	if err := store.configure(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to configure database: %w", err)
 	}
 
-	if err := store.migrate(); err != nil {
+	if err := store.migrate(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
@@ -91,55 +97,58 @@ func OpenStore(driver, path string) (*Store, error) {
 }
 
 // configure sets database-specific configuration
-func (s *Store) configure() error {
+func (s *Store) configure(ctx context.Context) error {
 	switch s.driver {
 	case SQLite:
-		if _, err := s.db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		if _, err := s.db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+			return err
+		}
+		if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
 			return fmt.Errorf("failed to enable foreign keys: %w", err)
 		}
-		if _, err := s.db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
+		if _, err := s.db.ExecContext(ctx, `PRAGMA journal_mode = WAL`); err != nil {
 			return fmt.Errorf("failed to set WAL mode: %w", err)
 		}
 	case PostgreSQL:
 		s.db.SetConnMaxIdleTime(15 * time.Minute)
 		s.db.SetMaxIdleConns(10)
-		s.db.SetMaxOpenConns(99)
+		s.db.SetMaxOpenConns(10)
 		s.db.SetConnMaxLifetime(1 * time.Hour)
 	}
 	return nil
 }
 
 // migrate performs database schema migrations
-func (s *Store) migrate() error {
+func (s *Store) migrate(ctx context.Context) error {
 	// Create jobs table first
-	if err := s.createJobsTable(); err != nil {
+	if err := s.createJobsTable(ctx); err != nil {
 		return fmt.Errorf("failed to create jobs table: %w", err)
 	}
 
 	// Create executions table
-	if err := s.createExecutionsTable(); err != nil {
+	if err := s.createExecutionsTable(ctx); err != nil {
 		return fmt.Errorf("failed to create executions table: %w", err)
 	}
 
 	// Create updated at trigger
-	if err := s.createUpdatedAtTrigger(); err != nil {
+	if err := s.createUpdatedAtTrigger(ctx); err != nil {
 		return fmt.Errorf("failed to create updated at trigger: %w", err)
 	}
 
 	// Add missing columns (for backward compatibility)
-	if err := s.addMissingColumns(); err != nil {
+	if err := s.addMissingColumns(ctx); err != nil {
 		return fmt.Errorf("failed to add missing columns: %w", err)
 	}
 
 	// Create indexes
-	if err := s.createIndexes(); err != nil {
+	if err := s.createIndexes(ctx); err != nil {
 		return fmt.Errorf("failed to create indexes: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Store) createJobsTable() error {
+func (s *Store) createJobsTable(ctx context.Context) error {
 	query := `CREATE TABLE IF NOT EXISTS apollo_jobs (
         name TEXT PRIMARY KEY,
         command TEXT NOT NULL,
@@ -168,11 +177,11 @@ func (s *Store) createJobsTable() error {
         )`
 	}
 
-	_, err := s.db.Exec(query)
+	_, err := s.db.ExecContext(ctx, query)
 	return err
 }
 
-func (s *Store) createExecutionsTable() error {
+func (s *Store) createExecutionsTable(ctx context.Context) error {
 	query := `CREATE TABLE IF NOT EXISTS apollo_executions (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -187,7 +196,8 @@ func (s *Store) createExecutionsTable() error {
         result TEXT,
         started_at BIGINT,
         finished_at BIGINT,
-        created_at INTEGER DEFAULT (strftime('%s', 'now'))
+        created_at INTEGER DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER DEFAULT (strftime('%s', 'now'))
     )`
 
 	if s.driver == PostgreSQL {
@@ -205,21 +215,22 @@ func (s *Store) createExecutionsTable() error {
             result TEXT,
             started_at BIGINT,
             finished_at BIGINT,
-            created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
+            created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW()),
+            updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())
         )`
 	}
 
-	_, err := s.db.Exec(query)
+	_, err := s.db.ExecContext(ctx, query)
 	return err
 }
-func (s *Store) createUpdatedAtTrigger() error {
+func (s *Store) createUpdatedAtTrigger(ctx context.Context) error {
 	if s.driver != PostgreSQL {
 		return nil // Only needed for PostgreSQL
 	}
 
 	// Create the trigger function
 	triggerFunc := `
-		CREATE OR REPLACE FUNCTION update_updated_at_column()
+		CREATE OR REPLACE FUNCTION apollo_update_updated_at_column()
 		RETURNS TRIGGER AS $$
 		BEGIN
 			NEW.updated_at = EXTRACT(EPOCH FROM NOW());
@@ -228,7 +239,7 @@ func (s *Store) createUpdatedAtTrigger() error {
 		$$ language 'plpgsql';
 	`
 
-	if _, err := s.db.Exec(triggerFunc); err != nil {
+	if _, err := s.db.ExecContext(ctx, triggerFunc); err != nil {
 		return fmt.Errorf("failed to create trigger function: %w", err)
 	}
 
@@ -237,15 +248,15 @@ func (s *Store) createUpdatedAtTrigger() error {
 		`DROP TRIGGER IF EXISTS update_apollo_jobs_updated_at ON apollo_jobs;
 		 CREATE TRIGGER update_apollo_jobs_updated_at 
 		 BEFORE UPDATE ON apollo_jobs 
-		 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+		 FOR EACH ROW EXECUTE FUNCTION apollo_update_updated_at_column()`,
 		`DROP TRIGGER IF EXISTS update_apollo_executions_updated_at ON apollo_executions;
 		 CREATE TRIGGER update_apollo_executions_updated_at 
 		 BEFORE UPDATE ON apollo_executions 
-		 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+		 FOR EACH ROW EXECUTE FUNCTION apollo_update_updated_at_column()`,
 	}
 
 	for _, trigger := range triggers {
-		if _, err := s.db.Exec(trigger); err != nil {
+		if _, err := s.db.ExecContext(ctx, trigger); err != nil {
 			return fmt.Errorf("failed to create trigger: %w", err)
 		}
 	}
@@ -253,17 +264,17 @@ func (s *Store) createUpdatedAtTrigger() error {
 	return nil
 }
 
-func (s *Store) addMissingColumns() error {
+func (s *Store) addMissingColumns(ctx context.Context) error {
 	columns := []struct {
 		table  string
 		column string
 		def    string
 	}{
-		{"apollo_jobs", "prefix", "TEXT"},
+		{"apollo_jobs", "prefix", "TEXT NOT NULL DEFAULT ''"},
 		{"apollo_jobs", "authorized_user", "TEXT NOT NULL DEFAULT ''"},
-		{"apollo_jobs", "image", "TEXT"},
-		{"apollo_executions", "prefix", "TEXT"},
-		{"apollo_executions", "image", "TEXT"},
+		{"apollo_jobs", "image", "TEXT NOT NULL DEFAULT ''"},
+		{"apollo_executions", "prefix", "TEXT NOT NULL DEFAULT ''"},
+		{"apollo_executions", "image", "TEXT NOT NULL DEFAULT ''"},
 	}
 
 	// Add database-specific timestamp columns
@@ -284,15 +295,15 @@ func (s *Store) addMissingColumns() error {
 			column string
 			def    string
 		}{
-			{"apollo_executions", "created_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
-			{"apollo_executions", "updated_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
-			{"apollo_jobs", "created_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
-			{"apollo_jobs", "updated_at", "INTEGER DEFAULT (strftime('%s', 'now'))"},
+			{"apollo_executions", "created_at", "INTEGER NOT NULL DEFAULT 0"},
+			{"apollo_executions", "updated_at", "INTEGER NOT NULL DEFAULT 0"},
+			{"apollo_jobs", "created_at", "INTEGER NOT NULL DEFAULT 0"},
+			{"apollo_jobs", "updated_at", "INTEGER NOT NULL DEFAULT 0"},
 		}...)
 	}
 
 	for _, col := range columns {
-		exists, err := s.columnExists(context.Background(), col.table, col.column)
+		exists, err := s.columnExists(ctx, col.table, col.column)
 		if err != nil {
 			return fmt.Errorf("failed to check column %s.%s: %w", col.table, col.column, err)
 		}
@@ -301,7 +312,7 @@ func (s *Store) addMissingColumns() error {
 		}
 
 		query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", col.table, col.column, col.def)
-		if _, err := s.db.Exec(query); err != nil {
+		if _, err := s.db.ExecContext(ctx, query); err != nil {
 			return fmt.Errorf("failed to add column %s.%s: %w", col.table, col.column, err)
 		}
 	}
@@ -309,36 +320,8 @@ func (s *Store) addMissingColumns() error {
 	return nil
 }
 
-func (s *Store) createIndexes() error {
-	// Ensure UPSERT conflict targets are backed by a unique constraint/index.
-	// This is especially important for older databases that predate PRIMARY KEY constraints,
-	// since CREATE TABLE IF NOT EXISTS will not modify existing tables.
-	//
-	// Note: PostgreSQL will refuse to create a unique index if duplicates already exist.
-	// We proactively dedupe by keeping the "newest" record per id (best-effort).
-	if s.driver == PostgreSQL {
-		// Best-effort de-duplication to allow creating a unique index on (id).
-		// Keeps the row with the latest finished_at/started_at/created_at.
-		dedupe := `
-			WITH ranked AS (
-				SELECT
-					ctid,
-					ROW_NUMBER() OVER (
-						PARTITION BY id
-						ORDER BY
-							COALESCE(finished_at, started_at, created_at) DESC NULLS LAST,
-							created_at DESC NULLS LAST
-					) AS rn
-				FROM apollo_executions
-			)
-			DELETE FROM apollo_executions e
-			USING ranked r
-			WHERE e.ctid = r.ctid AND r.rn > 1
-		`
-		if _, err := s.db.Exec(dedupe); err != nil {
-			return fmt.Errorf("failed to dedupe apollo_executions before creating unique index: %w", err)
-		}
-	}
+func (s *Store) createIndexes(ctx context.Context) error {
+	// Existing duplicates require operator repair. Startup must not delete execution history.
 
 	indexes := []string{
 		"CREATE UNIQUE INDEX IF NOT EXISTS uq_apollo_jobs_name ON apollo_jobs(name)",
@@ -348,7 +331,7 @@ func (s *Store) createIndexes() error {
 	}
 
 	for _, idx := range indexes {
-		if _, err := s.db.Exec(idx); err != nil {
+		if _, err := s.db.ExecContext(ctx, idx); err != nil {
 			return fmt.Errorf("failed to create index: %w", err)
 		}
 	}
@@ -365,7 +348,7 @@ func (s *Store) columnExists(ctx context.Context, table, column string) (bool, e
 		query = fmt.Sprintf(`SELECT 1 FROM pragma_table_info('%s') WHERE name = ?`, table)
 		args = []interface{}{column}
 	case PostgreSQL:
-		query = `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`
+		query = `SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`
 		args = []interface{}{table, column}
 	default:
 		return false, fmt.Errorf("unsupported database driver: %s", s.driver)

@@ -82,7 +82,7 @@ func openStore(driver, path string, migrate bool) (*Store, error) {
 		db.SetMaxOpenConns(1)
 		db.SetMaxIdleConns(1)
 	}
-	if err := db.PingContext(ctx); err != nil {
+	if err := pingStore(ctx, db.PingContext); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}

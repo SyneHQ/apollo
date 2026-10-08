@@ -27,7 +27,11 @@ func NewJobsServer(r runner.Runner, c *cfg.Config) (*JobsServer, error) {
 	var sch *scheduler.Scheduler
 	var st *scheduler.Store
 	if (c.JobsProvider == "local" || c.JobsProvider == "hakopod") && c.Store.Driver != "" && c.Store.Path != "" {
-		st, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
+		open := scheduler.OpenStore
+		if c.Environment == "production" && c.Store.Driver == "postgres" {
+			open = scheduler.OpenRuntimeStore
+		}
+		st, err := open(c.Store.Driver, c.Store.Path)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler storage initialization failed")
 		}

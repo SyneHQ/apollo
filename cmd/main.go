@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"log"
 	"net"
 	"os"
@@ -16,13 +17,20 @@ import (
 	"github.com/SyneHQ/apollo/keys"
 	"github.com/SyneHQ/apollo/proto"
 	"github.com/SyneHQ/apollo/runner"
+	"github.com/SyneHQ/apollo/scheduler"
 	_secrets "github.com/SyneHQ/apollo/secrets"
 	jobsserver "github.com/SyneHQ/apollo/server"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	if err := run(); err != nil {
+	migrateOnly := flag.Bool("migrate-only", false, "Apply the PostgreSQL scheduler schema and exit before starting providers or jobs")
+	flag.Parse()
+	operation := run
+	if *migrateOnly {
+		operation = migrateStore
+	}
+	if err := operation(); err != nil {
 		log.Print(err)
 		os.Exit(1)
 	}
@@ -159,5 +167,19 @@ func run() error {
 	case <-shutdown.Done():
 		return errors.New("connector shutdown deadline exceeded")
 	}
+	return nil
+}
+
+func migrateStore() error {
+	dsn := os.Getenv("APOLLO_MIGRATION_DATABASE_URL")
+	if dsn == "" {
+		return errors.New("APOLLO_MIGRATION_DATABASE_URL is required with --migrate-only")
+	}
+	store, err := scheduler.OpenStore("postgres", dsn)
+	if err != nil {
+		return errors.New("scheduler migration failed; verify database access and inspect the reviewed schema")
+	}
+	defer store.Close()
+	log.Print("Scheduler migrations completed")
 	return nil
 }

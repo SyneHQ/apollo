@@ -57,6 +57,15 @@ type Store struct {
 
 // OpenStore creates a new Store instance with the specified driver and connection string
 func OpenStore(driver, path string) (*Store, error) {
+	return openStore(driver, path, true)
+}
+
+// OpenRuntimeStore verifies the deployed schema without creating or changing it.
+func OpenRuntimeStore(driver, path string) (*Store, error) {
+	return openStore(driver, path, false)
+}
+
+func openStore(driver, path string, migrate bool) (*Store, error) {
 	if (driver != "sqlite" && driver != "postgres") || path == "" {
 		return nil, errors.New("store requires sqlite or postgres and a nonempty path")
 	}
@@ -88,9 +97,18 @@ func OpenStore(driver, path string) (*Store, error) {
 		return nil, fmt.Errorf("failed to configure database: %w", err)
 	}
 
-	if err := store.migrate(ctx); err != nil {
+	if migrate {
+		if err := store.migrate(ctx); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to migrate database: %w", err)
+		}
+		if err := store.markSchemaReady(ctx); err != nil {
+			db.Close()
+			return nil, errors.New("cannot record scheduler schema version")
+		}
+	} else if err := store.validateSchema(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
+		return nil, errors.New("scheduler schema is not ready; run the reviewed migration before starting the scheduler")
 	}
 
 	return store, nil

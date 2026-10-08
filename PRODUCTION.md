@@ -2,7 +2,10 @@
 
 - Set `PORT=6910`, a 32-character or longer `APOLLO_SERVICE_TOKEN`, and `METADATA_DATABASE_URL`.
 - Set `ENVIRONMENT=production`. Use `STORE_DRIVER=postgres` with a dedicated `STORE_PATH` connection URL, or `sqlite` with an absolute path on a persistent volume.
-- Run one scheduler replica. PostgreSQL storage alone does not provide leader election.
+- Apply PostgreSQL schema changes in a separate job: `APOLLO_MIGRATION_DATABASE_URL=... /app/main --migrate-only`. This job does not start providers, listeners or schedules.
+- Give the production scheduler DML access to `apollo_jobs` and `apollo_executions`, plus SELECT on `apollo_schema_receipts`. Runtime startup checks the schema version and required columns without DDL.
+- Give the web app SELECT-only access to `apollo_executions` through `APOLLO_DATABASE_URL`. Keep migration credentials out of both runtimes.
+- Run one scheduler replica with Recreate updates. PostgreSQL storage alone does not provide leader election.
 - If Infisical is enabled, set its HTTPS URL, client ID, client secret, project ID, and environment. A partial configuration or failed secret load stops startup. Provider error bodies are not logged.
 - Startup verifies metadata connectivity and schedule storage before it starts jobs or accepts requests. Invalid stored schedules stop startup and require operator repair.
 - Keep the gRPC listener on a private service network. Requests still require the service token, user identity, team membership, and current job ownership.

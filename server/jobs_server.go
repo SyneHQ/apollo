@@ -126,10 +126,13 @@ func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*pro
 }
 
 func (s *JobsServer) recordExecution(ctx context.Context, r runner.JobRequest, id string, result string, runErr error, start, optionalEnd int64) {
-	end := time.Now().Unix()
+	end := optionalEnd
 	isRunning := optionalEnd == 0
-	if optionalEnd != 0 {
-		end = optionalEnd
+	if !isRunning {
+		// A canceled caller or scheduler must not erase the final execution status.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
 	}
 	if s.store == nil {
 		log.Println("No store found")

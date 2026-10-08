@@ -11,6 +11,7 @@ const (
 
 type JobRequest struct {
 	AuthorizedUser string
+	OwnerScope     string // Verified tenant identity supplied by the service authority.
 	Name           string
 	Image          string
 	JobID          string // Optional: if not provided, will be auto-generated

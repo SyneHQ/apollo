@@ -15,6 +15,7 @@ type JobsConfig struct {
 	Image   string         `yaml:"image"`
 	Secrets []SecretConfig `yaml:"secrets"`
 	Jobs    []JobConfig    `yaml:"jobs"`
+	Hakopod HakopodConfig  `yaml:"hakopod"`
 }
 
 type SecretConfig struct {
@@ -123,8 +124,8 @@ func (c *Config) Validate() error {
 	if err != nil || port < 1 || port > 65535 {
 		return errors.New("PORT must be an integer from 1 to 65535")
 	}
-	if c.JobsProvider != "local" && c.JobsProvider != "cloudrun" {
-		return errors.New("JOBS_PROVIDER must be local or cloudrun")
+	if c.JobsProvider != "local" && c.JobsProvider != "cloudrun" && c.JobsProvider != "hakopod" {
+		return errors.New("JOBS_PROVIDER must be local, cloudrun or hakopod")
 	}
 	if c.Store.Driver != "sqlite" && c.Store.Driver != "postgres" {
 		return errors.New("STORE_DRIVER must be sqlite or postgres")
@@ -139,4 +140,20 @@ func (c *Config) Validate() error {
 		return errors.New("cloudrun requires GCP_PROJECT_ID and GCP_REGION")
 	}
 	return nil
+}
+
+// HakopodConfig pins the reviewed service templates. API credentials stay in environment secrets.
+type HakopodConfig struct {
+	APIURL        string                     `yaml:"api_url"`
+	ApplicationID string                     `yaml:"application_id"`
+	Revision      int64                      `yaml:"revision"`
+	Templates     map[string]HakopodTemplate `yaml:"templates"`
+}
+type HakopodTemplate struct {
+	Service      string `yaml:"service"`
+	Image        string `yaml:"image"`
+	RequestImage string `yaml:"request_image"`
+	Prefix       string `yaml:"prefix"`
+	CPU          string `yaml:"cpu"`
+	Memory       string `yaml:"memory"`
 }

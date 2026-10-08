@@ -1,0 +1,20 @@
+# Mount this file as /app/jobs.yml. Replace the reviewed deployment identifiers.
+image: ghcr.io/example/rover@sha256:REPLACE_WITH_DIGEST
+cmd: /app/rover
+jobs:
+  - name: handleBackupJob
+    resources:
+      cpu: 1000m
+      memory: 2Gi
+hakopod:
+  api_url: https://control.example.com
+  application_id: REPLACE_WITH_APPLICATION_ID
+  revision: 1
+  templates:
+    handleBackupJob:
+      service: backup-job
+      image: ghcr.io/example/rover@sha256:REPLACE_WITH_DIGEST
+      request_image: ghcr.io/example/rover:sudo
+      prefix: /app/rover
+      cpu: 1000m
+      memory: 2Gi

@@ -18,6 +18,7 @@ func (s *JobsServer) runAuthorized(ctx context.Context, prefix string, r runner.
 	if err != nil || team == "" {
 		return "", errors.New("job no longer authorized")
 	}
+	r.OwnerScope = team
 	req := &proto.RunJobRequest{Name: r.Name, Image: r.Image, Prefix: r.Prefix, Command: r.Command, ArgsBase64: r.ArgsJSONBase64}
 	if err := ValidateJob(ctx, s.authority, req, team); err != nil {
 		return "", err

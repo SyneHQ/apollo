@@ -26,7 +26,7 @@ type JobsServer struct {
 func NewJobsServer(r runner.Runner, c *cfg.Config) (*JobsServer, error) {
 	var sch *scheduler.Scheduler
 	var st *scheduler.Store
-	if c.JobsProvider == "local" && c.Store.Driver != "" && c.Store.Path != "" {
+	if (c.JobsProvider == "local" || c.JobsProvider == "hakopod") && c.Store.Driver != "" && c.Store.Path != "" {
 		st, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
 		if err != nil {
 			return nil, fmt.Errorf("scheduler storage initialization failed")
@@ -180,7 +180,8 @@ func (s *JobsServer) DeleteJob(ctx context.Context, req *proto.DeleteJobRequest)
 	if s.store != nil {
 		_ = s.store.Delete(ctx, req.GetName())
 	}
-	if err := s.runner.DeleteJob(ctx, req.GetName()); err != nil {
+	owner, _ := ctx.Value(teamContextKey{}).(string)
+	if err := s.runner.DeleteJob(runner.WithOwnerScope(ctx, owner), req.GetName()); err != nil {
 		return nil, err
 	}
 	return &proto.DeleteJobResponse{}, nil

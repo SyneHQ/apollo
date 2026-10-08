@@ -50,11 +50,18 @@ func run() error {
 		return err
 	}
 
-	secrets = _secrets.FilterSecrets(secrets, config.Jobs.Secrets)
+	if config.JobsProvider != "hakopod" {
+		secrets = _secrets.FilterSecrets(secrets, config.Jobs.Secrets)
+	}
 
 	// Choose runner
 	var r runner.Runner
 	switch config.JobsProvider {
+	case "hakopod":
+		r, err = runner.NewHakopodRunner(config.Jobs.Hakopod, os.Getenv("APOLLO_HAKOPOD_API_KEY"), os.Getenv("APOLLO_HAKOPOD_CA_PEM"))
+		if err != nil {
+			return err
+		}
 	case "cloudrun":
 		r = runner.NewBatchRunner(config.GCPProjectID, config.GCPRegion, config.Jobs.Image, secrets)
 	default:

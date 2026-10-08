@@ -10,14 +10,13 @@ import (
 )
 
 // Reload schedules from store at startup
-func (s *JobsServer) Reload(ctx context.Context) {
+func (s *JobsServer) Reload(ctx context.Context) error {
 	if s.sched == nil || s.store == nil {
-		return
+		return nil
 	}
 	records, err := s.store.List(ctx)
 	if err != nil {
-		log.Printf("scheduler reload failed: %v", err)
-		return
+		return fmt.Errorf("cannot load stored schedules")
 	}
 
 	log.Printf("restoring %d schedules", len(records))
@@ -44,12 +43,9 @@ func (s *JobsServer) Reload(ctx context.Context) {
 			return err
 		})
 		if err != nil {
-			log.Printf("failed to restore schedule for %s: %v", r.Name, err)
+			return fmt.Errorf("cannot restore stored schedule")
 		}
 		log.Printf("restored schedule for %s", r.Name)
-
-		// small delay to avoid thundering herd on boot
-		time.Sleep(50 * time.Millisecond)
 
 		nextRun, ok := s.sched.NextRun(r.Name)
 		if !ok {
@@ -60,4 +56,5 @@ func (s *JobsServer) Reload(ctx context.Context) {
 	}
 
 	log.Printf("restored %d schedules", len(records))
+	return nil
 }

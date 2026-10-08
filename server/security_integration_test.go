@@ -45,7 +45,11 @@ func TestRealMetadataAndGRPCExecution(t *testing.T) {
 	token := strings.Repeat("t", 32)
 	server := grpc.NewServer(grpc.UnaryInterceptor(Authorization(token, authority)))
 	probe := &executionProbe{}
-	jobs := NewJobsServer(probe, &config.Config{})
+	jobs, err := NewJobsServer(probe, &config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close(context.Background())
 	jobs.SetAuthority(authority)
 	proto.RegisterJobsServiceServer(server, jobs)
 	listener := bufconn.Listen(1024 * 1024)

@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	config "github.com/SyneHQ/apollo"
 	"github.com/SyneHQ/apollo/connectorjobs"
@@ -20,6 +22,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -30,10 +39,7 @@ func main() {
 	secrets, err := keys.NewInfisicalSecrets(useInfisical)
 
 	if err != nil {
-		if useInfisical {
-			os.Exit(1)
-		}
-		log.Printf("Error loading infisical secrets: %v", err)
+		return err
 	}
 
 	log.Println("Loading config")
@@ -41,7 +47,7 @@ func main() {
 	config, err := config.Load()
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	secrets = _secrets.FilterSecrets(secrets, config.Jobs.Secrets)
@@ -55,53 +61,96 @@ func main() {
 		r = runner.NewLocalRunner(config.Jobs.Image, secrets)
 	}
 
-	// Start gRPC server
-	lis, err := net.Listen("tcp", ":"+config.Port)
-	if err != nil {
-		panic(err)
-	}
 	token := os.Getenv("APOLLO_SERVICE_TOKEN")
 	if len(token) < 32 {
-		log.Fatal("APOLLO_SERVICE_TOKEN must contain at least 32 characters")
+		return errors.New("APOLLO_SERVICE_TOKEN must contain at least 32 characters")
+	}
+	if os.Getenv("METADATA_DATABASE_URL") == "" {
+		return errors.New("METADATA_DATABASE_URL must be set")
 	}
 	metadataDB, err := sql.Open("postgres", os.Getenv("METADATA_DATABASE_URL"))
 	if err != nil {
-		log.Fatal("metadata authorization database unavailable")
+		return errors.New("metadata authorization database configuration is invalid")
 	}
 	defer metadataDB.Close()
+	metadataDB.SetMaxOpenConns(10)
+	metadataDB.SetMaxIdleConns(2)
+	metadataDB.SetConnMaxLifetime(30 * time.Minute)
+	startup, cancelStartup := context.WithTimeout(ctx, 20*time.Second)
+	defer cancelStartup()
+	if err := metadataDB.PingContext(startup); err != nil {
+		return errors.New("metadata authorization database is unavailable")
+	}
 	authority := jobsserver.SQLJobAuthority{DB: metadataDB}
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(jobsserver.Authorization(token, authority)), grpc.MaxRecvMsgSize(128*1024))
-	js := jobsserver.NewJobsServer(r, config)
+	js, err := jobsserver.NewJobsServer(r, config)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := js.Close(shutdown); err != nil {
+			log.Print("scheduler shutdown deadline exceeded")
+		}
+	}()
 	js.SetAuthority(authority)
-	js.Reload(context.Background())
+	if err := js.Reload(startup); err != nil {
+		return err
+	}
 	connectorDone := make(chan struct{})
+	var supervisor *connectorjobs.Supervisor
 	if os.Getenv("APOLLO_CONNECTORS_ENABLED") == "true" {
 		if config.JobsProvider != "local" {
-			log.Fatal("connector dispatch currently requires JOBS_PROVIDER=local")
+			return errors.New("connector dispatch currently requires JOBS_PROVIDER=local")
 		}
-		supervisor, err := connectorjobs.NewSupervisor(connectorjobs.Store{DB: metadataDB}, r, connectorjobs.Options{
+		supervisor, err = connectorjobs.NewSupervisor(connectorjobs.Store{DB: metadataDB}, r, connectorjobs.Options{
 			Image: os.Getenv("APOLLO_CONNECTOR_IMAGE"), SigningKey: os.Getenv("APOLLO_JOB_SIGNING_KEY"),
 			BootstrapOrigin: os.Getenv("CONNECTOR_BOOTSTRAP_ORIGIN"), BridgeOrigin: os.Getenv("CONNECTOR_BRIDGE_ORIGIN"),
 			ServiceCA: os.Getenv("CONNECTOR_SERVICE_CA_PEM"),
 		})
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
+	}
+	lis, err := net.Listen("tcp", ":"+config.Port)
+	if err != nil {
+		return errors.New("cannot bind gRPC listener")
+	}
+	defer lis.Close()
+	js.Start()
+	if supervisor != nil {
 		go func() { defer close(connectorDone); supervisor.Run(ctx) }()
 	} else {
 		close(connectorDone)
 	}
 	proto.RegisterJobsServiceServer(grpcServer, js)
-	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			panic(err)
-		}
-	}()
-
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- grpcServer.Serve(lis) }()
 	log.Printf("Server starting on port %s", config.Port)
-
-	<-ctx.Done()
-	log.Println("Shutting down server...")
-	grpcServer.GracefulStop()
-	<-connectorDone
+	select {
+	case <-ctx.Done():
+	case err := <-serveDone:
+		if err != nil {
+			stop()
+			grpcServer.Stop()
+			return errors.New("gRPC server stopped unexpectedly")
+		}
+	}
+	stop()
+	shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	drain := make(chan struct{})
+	go func() { grpcServer.GracefulStop(); close(drain) }()
+	select {
+	case <-drain:
+	case <-shutdown.Done():
+		grpcServer.Stop()
+	}
+	select {
+	case <-connectorDone:
+	case <-shutdown.Done():
+		return errors.New("connector shutdown deadline exceeded")
+	}
+	return nil
 }

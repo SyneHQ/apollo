@@ -2,65 +2,69 @@ package keys
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"errors"
+	"net/url"
 	"os"
+	"time"
 
 	infisical "github.com/infisical/go-sdk"
 	"github.com/infisical/go-sdk/packages/models"
 )
 
 type InfisicalSecrets struct {
-	client  infisical.InfisicalClientInterface
-	secrets []models.Secret
+	client infisical.InfisicalClientInterface
 }
 
-func (i *InfisicalSecrets) GetClient() infisical.InfisicalClientInterface {
-	return i.client
+func (i *InfisicalSecrets) GetClient() infisical.InfisicalClientInterface { return i.client }
+
+type BootstrapConfig struct{ URL, ClientID, ClientSecret, ProjectID, Environment string }
+
+// Hydrate loads secrets before configuration, database access, or listeners start.
+func Hydrate(getenv func(string) string, fetch func(context.Context, BootstrapConfig) error) error {
+	enabled := getenv("ENABLE_INFISICAL") == "true" || getenv("USE_INFISICAL") == "true" || getenv("INFISICAL_CLIENT_ID") != "" || getenv("INFISICAL_CLIENT_SECRET") != ""
+	if !enabled {
+		return nil
+	}
+	cfg := BootstrapConfig{URL: getenv("INFISICAL_API_URL"), ClientID: getenv("INFISICAL_CLIENT_ID"), ClientSecret: getenv("INFISICAL_CLIENT_SECRET"), ProjectID: getenv("INFISICAL_PROJECT_ID"), Environment: getenv("INFISICAL_ENV")}
+	if cfg.URL == "" {
+		cfg.URL = "https://app.infisical.com"
+	}
+	endpoint, err := url.Parse(cfg.URL)
+	if err != nil || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		return errors.New("INFISICAL_API_URL must be an HTTPS service URL without credentials, query parameters, or a fragment")
+	}
+	if cfg.ClientID == "" || cfg.ClientSecret == "" || cfg.ProjectID == "" || cfg.Environment == "" {
+		return errors.New("Infisical bootstrap configuration is incomplete; set client ID, client secret, project ID, and environment")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := fetch(ctx, cfg); err != nil {
+		return errors.New("Infisical secret loading failed; verify service access and bootstrap configuration")
+	}
+	return nil
 }
 
-func NewInfisicalSecrets(exitOnError bool) ([]models.Secret, error) {
-	log.Printf("🔑 Line 18 - NewInfisicalSecrets: Starting Infisical client initialization")
-
-	client := infisical.NewInfisicalClient(context.Background(), infisical.Config{
-		SiteUrl:          os.Getenv("INFISICAL_API_URL"), // Optional, default is https://app.infisical.com
-		AutoTokenRefresh: true,                           // Wether or not to let the SDK handle the access token lifecycle. Defaults to true if not specified.
-	})
-
-	infisicalSecrets := InfisicalSecrets{
-		client:  client,
-		secrets: make([]models.Secret, 0),
-	}
-
-	log.Printf("🔐 Line 28 - NewInfisicalSecrets: Attempting universal auth login")
-	_, err := infisicalSecrets.client.Auth().UniversalAuthLogin(os.Getenv("INFISICAL_CLIENT_ID"), os.Getenv("INFISICAL_CLIENT_SECRET"))
-
-	if err != nil {
-		log.Printf("❌ Line 32 - NewInfisicalSecrets: Auth login failed - %v", err)
-		if exitOnError {
-			os.Exit(1)
+// NewInfisicalSecrets returns errors to the caller. It never exits the process.
+// enabled permits callers to require loading without setting an environment flag.
+func NewInfisicalSecrets(enabled bool) ([]models.Secret, error) {
+	var result []models.Secret
+	getenv := func(key string) string {
+		if enabled && key == "ENABLE_INFISICAL" {
+			return "true"
 		}
-		return nil, fmt.Errorf("failed to authenticate with Infisical: %w", err)
+		return os.Getenv(key)
 	}
-
-	log.Printf("✅ Line 39 - NewInfisicalSecrets: Auth login successful, loading secrets")
-	// load the secrets
-	sec, err := infisicalSecrets.client.Secrets().List(infisical.ListSecretsOptions{
-		ProjectID:          os.Getenv("INFISICAL_PROJECT_ID"),
-		Environment:        os.Getenv("INFISICAL_ENV"),
-		AttachToProcessEnv: true,
-	})
-
-	if err != nil {
-		log.Printf("❌ Line 47 - NewInfisicalSecrets: Failed to load secrets - %v", err)
-		if exitOnError {
-			os.Exit(1)
+	err := Hydrate(getenv, func(ctx context.Context, cfg BootstrapConfig) error {
+		client := infisical.NewInfisicalClient(ctx, infisical.Config{SiteUrl: cfg.URL, AutoTokenRefresh: false})
+		if _, err := client.Auth().UniversalAuthLogin(cfg.ClientID, cfg.ClientSecret); err != nil {
+			return err
 		}
-		return nil, fmt.Errorf("failed to load secrets from Infisical: %w", err)
-	}
-
-	log.Printf("🎉 Line 54 - NewInfisicalSecrets: Infisical client successfully initialized and secrets loaded")
-
-	infisicalSecrets.secrets = sec
-	return infisicalSecrets.secrets, nil
+		secrets, err := client.Secrets().List(infisical.ListSecretsOptions{ProjectID: cfg.ProjectID, Environment: cfg.Environment, AttachToProcessEnv: true})
+		if err != nil {
+			return err
+		}
+		result = secrets
+		return nil
+	})
+	return result, err
 }

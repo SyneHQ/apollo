@@ -22,23 +22,18 @@ type JobsServer struct {
 	authority JobAuthority
 }
 
-func NewJobsServer(r runner.Runner, c *cfg.Config) *JobsServer {
+func NewJobsServer(r runner.Runner, c *cfg.Config) (*JobsServer, error) {
 	var sch *scheduler.Scheduler
 	var st *scheduler.Store
 	if c.JobsProvider == "local" && c.Store.Driver != "" && c.Store.Path != "" {
-		sch = scheduler.New(cron.DefaultLogger)
-		// Start the cron loop immediately so restored schedules compute Next runs.
-		sch.Start()
-		// best-effort open local sqlite at ./jobs.db
-		log.Println("Opening store", c.Store.Driver)
-		s, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
-		if err == nil {
-			st = s
-		} else {
-			log.Println("Error opening store", err)
+		st, err := scheduler.OpenStore(c.Store.Driver, c.Store.Path)
+		if err != nil {
+			return nil, fmt.Errorf("scheduler storage initialization failed")
 		}
+		sch = scheduler.New(cron.DefaultLogger)
+		return &JobsServer{runner: r, cfg: c, sched: sch, store: st}, nil
 	}
-	return &JobsServer{runner: r, cfg: c, sched: sch, store: st}
+	return &JobsServer{runner: r, cfg: c, sched: sch, store: st}, nil
 }
 
 func (s *JobsServer) RunJob(ctx context.Context, req *proto.RunJobRequest) (*proto.RunJobResponse, error) {
@@ -247,4 +242,26 @@ func mapJobType(t proto.JobType) runner.JobType {
 	default:
 		return runner.JobTypeOneTime
 	}
+}
+
+// Start enables restored schedules after authorization and startup checks succeed.
+func (s *JobsServer) Start() {
+	if s.sched != nil {
+		s.sched.Start()
+	}
+}
+
+// Close cancels scheduled executions and bounds shutdown by the caller's deadline.
+func (s *JobsServer) Close(ctx context.Context) error {
+	if s.sched != nil {
+		select {
+		case <-s.sched.Stop().Done():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if s.store != nil {
+		return s.store.Close()
+	}
+	return nil
 }

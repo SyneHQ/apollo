@@ -30,4 +30,6 @@ Each template fixes its deployment revision, image digest, command, resources an
 
 The worker command must read `/run/hakopod/invocation/input.json` directly. Use a payload-file-enabled Rover image. Flowr and connector workers remain unsupported by this provider until their own file-input contracts are qualified. Keep `APOLLO_CONNECTORS_ENABLED=false`.
 
+Database access belongs to the job service, not Apollo's request: reference the DSN as an application secret (`secrets.DATABASE_URL = { ref = "..." }`) and reach the database through `private_egress` (an administrator-approved destination) or a shared internal network. A failed invocation's error carries the container exit code when Hakopod reports one, for example `Hakopod invocation failed: exit code 3`; its bounded logs are returned with it.
+
 Run one Apollo scheduler replica. Hakopod dispatch, cancellation, cleanup and bounded terminal logs use its durable invocation API. Lost submission acknowledgements are looked up by idempotency key; Apollo does not create a replacement job. A cancellation that cannot be confirmed is returned as an error.

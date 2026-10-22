@@ -53,6 +53,7 @@ type invocationRecord struct {
 	CorrelationID  string `json:"correlation_id"`
 	Status         string `json:"status"`
 	CleanupPending bool   `json:"cleanup_pending"`
+	ExitCode       *int32 `json:"exit_code"`
 }
 
 type invocationCreate struct {
@@ -307,6 +308,9 @@ func (r *HakopodRunner) RunJob(ctx context.Context, prefix string, req JobReques
 					logs.Text += "\n[worker logs truncated]"
 				}
 				if current.Status != "succeeded" {
+					if current.ExitCode != nil {
+						return logs.Text, fmt.Errorf("Hakopod invocation %s: exit code %d", current.Status, *current.ExitCode)
+					}
 					return logs.Text, fmt.Errorf("Hakopod invocation %s", current.Status)
 				}
 				return logs.Text, nil

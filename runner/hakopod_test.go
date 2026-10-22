@@ -224,3 +224,22 @@ func TestHakopodAliasUsesPinnedImageAndFixedResourceCeiling(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestHakopodReportsExitCodeWithLogs(t *testing.T) {
+	var r *HakopodRunner
+	var req JobRequest
+	r, req = newHakopodHarness(t, func(w http.ResponseWriter, h *http.Request) {
+		if strings.HasSuffix(h.URL.Path, "/logs") {
+			json.NewEncoder(w).Encode(map[string]any{"text": "boom", "truncated": false})
+			return
+		}
+		value := testInvocation(r, req, "failed")
+		code := int32(3)
+		value.ExitCode = &code
+		json.NewEncoder(w).Encode(value)
+	})
+	logs, err := r.RunJob(context.Background(), req.Prefix, req)
+	if logs != "boom" || err == nil || err.Error() != "Hakopod invocation failed: exit code 3" {
+		t.Fatalf("unexpected result %q %v", logs, err)
+	}
+}

@@ -24,7 +24,7 @@ Without the test URL, PostgreSQL integration checks skip. Unit tests do not qual
 
 ## Native Hakopod jobs
 
-Set `JOBS_PROVIDER=hakopod` and mount a reviewed [jobs file](examples/hakopod-jobs.yml) at `/app/jobs.yml`. Supply `APOLLO_HAKOPOD_API_KEY` through the secret provider; its machine identity needs only `jobs:invoke`, `jobs:read`, `jobs:cancel`, and `jobs:logs` on this application and must be listed by each job template.
+Run the `ghcr.io/synehq/apollo-hakopod` image ([hakopod.Dockerfile](hakopod.Dockerfile)): it has no Docker CLI, runs as a nonroot user and sets `JOBS_PROVIDER=hakopod`. Mount a reviewed [jobs file](examples/hakopod-jobs.yml) at `/app/jobs.yml`. Supply `APOLLO_HAKOPOD_API_KEY` through the secret provider; its machine identity needs only `jobs:invoke`, `jobs:read`, `jobs:cancel`, and `jobs:logs` on this application and must be listed by each job template.
 
 Each template fixes its deployment revision, image digest, command, resources and secret grants. `request_image` optionally maps an existing authenticated image alias to that digest. Worker execution always uses the fixed template; caller resource hints cannot exceed its ceiling. TLS verification is mandatory; a private CA can be supplied with `APOLLO_HAKOPOD_CA_PEM`.
 
